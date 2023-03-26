@@ -2,6 +2,6 @@ package gg.beemo.latte
 
 object CommonConfig {
 
-    const val MATCHA_CLUSTER_ID = -1
+    const val VANILLA_CLUSTER_ID = -1
 
 }

@@ -41,7 +41,7 @@ repositories {
 dependencies {
     // We need to replace this with the declaration for a local
     // dependency \/
-    // implementation 'gg.beemo.latte:latte'
+    implementation 'gg.beemo.latte:latte'
 
     // Logging
     implementation 'org.apache.logging.log4j:log4j-api:2.18.0'
