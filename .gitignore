@@ -1,0 +1,9 @@
+.gradle/
+build/
+.idea/
+.vscode/
+node_modules/
+dist/
+yarn-error.log
+.env
+.DS_Store

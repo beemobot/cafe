@@ -1,0 +1,22 @@
+{
+    "name": "@beemobot/common",
+    "version": "1.0.0",
+    "author": "Beemo Devs (https://beemo.gg)",
+    "license": "MIT",
+    "type": "module",
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "scripts": {
+        "build": "rm -rf dist/ && tsc",
+        "lint": "eslint ."
+    },
+    "files": [
+        "dist"
+    ],
+    "dependencies": {
+        "kafkajs": "^2.2.3"
+    },
+    "devDependencies": {
+        "typescript": "^4.9.4"
+    }
+}

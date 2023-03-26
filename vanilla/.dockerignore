@@ -1,0 +1,14 @@
+.github/
+.gradle/
+.idea/
+build/
+gradle/
+.dockerignore
+.env
+.env.example
+.gitignore
+.gitmodules
+Dockerfile
+gradlew
+gradlew.bat
+README.md

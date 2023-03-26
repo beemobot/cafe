@@ -1,0 +1,24 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model RaidUser {
+  internal_raid_id  String    @db.Uuid
+  user_id           BigInt    @unique
+  name              String
+  avatar_hash       String?
+  created_at        DateTime  @db.Timestamptz
+  joined_at         DateTime  @db.Timestamptz
+}
+
+model Raid {
+  internal_id       String     @unique @db.Uuid
+  external_id       String     @unique
+  guild_id          BigInt
+  concluded_at      DateTime?  @db.Timestamptz
+}

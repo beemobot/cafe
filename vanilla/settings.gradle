@@ -1,0 +1,3 @@
+includeBuild "modules/latte"
+
+rootProject.name = 'vanilla'

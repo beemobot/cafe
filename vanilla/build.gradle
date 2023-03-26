@@ -1,0 +1,60 @@
+plugins {
+    id 'java'
+    id 'application'
+    id 'org.jetbrains.kotlin.jvm' version '1.7.10'
+}
+
+group 'gg.beemo.vanilla'
+version '1.0.0'
+
+kotlin {
+    jvmToolchain {
+        languageVersion.set(JavaLanguageVersion.of('17'))
+    }
+}
+
+application {
+    mainClass.set("gg.beemo.vanilla.Vanilla")
+    applicationDefaultJvmArgs = [
+            "-XX:+AlwaysPreTouch",
+            "-XX:+PerfDisableSharedMem",
+            "-XX:+UseG1GC",
+            "-XX:MaxRAMPercentage=80",
+            "-XX:MinRAMPercentage=80"
+    ]
+}
+
+task installDev {
+    jar.archiveFileName = "vanilla.jar"
+    dependsOn installDist
+}
+
+task downloadDependencies(type: Copy) {
+    from sourceSets.test.runtimeClasspath
+    into 'runtime/'
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    // We need to replace this with the declaration for a local
+    // dependency \/
+    // implementation 'gg.beemo.latte:latte'
+
+    // Logging
+    implementation 'org.apache.logging.log4j:log4j-api:2.18.0'
+    implementation 'org.apache.logging.log4j:log4j-core:2.18.0'
+    implementation 'org.apache.logging.log4j:log4j-slf4j18-impl:2.18.0'
+
+    // Kotlin Coroutines
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.6.4'
+}
+
+jar {
+    manifest {
+        attributes 'Main-Class': 'gg.beemo.vanilla.Vanilla',
+                'Class-Path': configurations.runtimeClasspath.files.collect { it.name }.join(' ')
+    }
+}

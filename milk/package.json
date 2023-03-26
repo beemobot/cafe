@@ -1,0 +1,26 @@
+{
+  "name": "milk",
+  "version": "1.0.0",
+  "description": "milk is used to serve beemo's archives or logs.",
+  "main": "index.js",
+  "author": "BeemoBot",
+  "license": "MIT",
+  "type": "module",
+  "dependencies": {
+    "@beemobot/common": "^1.0.0",
+    "@prisma/client": "4.8.1",
+    "@sentry/node": "^7.29.0",
+    "dotenv": "^16.0.3",
+    "fastify": "^4.11.0",
+    "node-cache": "^5.1.2",
+    "typescript": "^4.9.4"
+  },
+  "scripts": {
+    "build": "rm -rf dist/ && tsc",
+    "serve": "node --enable-source-maps dist/index.js"
+  },
+  "devDependencies": {
+    "@types/node": "^18.11.18",
+    "prisma": "^4.8.1"
+  }
+}

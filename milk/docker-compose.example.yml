@@ -1,0 +1,50 @@
+version: '3.7'
+
+# IMPORTANT: If you haven't configured this, please look into the reads service below and configure the
+# server port and whatever is needed to configure before renaming the file into docker-compose.yml
+
+services:
+  writes:
+    image: milk:latest
+    env_file:
+      - .env
+    environment:
+      - "READS_ENABLED=false"
+      - "WRITES_ENABLED=true"
+    deploy:
+      mode: replicated
+      replicas: 2
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 20
+        window: 120s
+      update_config:
+        parallelism: 2
+        delay: 10s
+        order: stop-first
+  reads:
+    image: milk:latest
+    env_file:
+      - .env
+    environment:
+      - "READS_ENABLED=true"
+      - "WRITES_ENABLED=false"
+      # IMPORTANT: Include the SERVER_PORT here.
+      - "SERVER_PORT="
+    ports:
+      # IMPORTANT: And add the SERVER_PORT here as well to have the port exposed.
+      # Include the quotes, and also it must match the following format "HOST:CONTAINER" e.g. [7732:7732]
+      -
+    deploy:
+      mode: replicated
+      replicas: 3
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 20
+        window: 120s
+      update_config:
+        parallelism: 2
+        delay: 10s
+        order: stop-first
