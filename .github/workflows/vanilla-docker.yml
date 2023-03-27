@@ -48,9 +48,10 @@ jobs:
           images: ghcr.io/${{ github.repository }}
 
       - name: Build and push Docker image
-        uses: docker/build-push-action@v3
+        uses: docker/build-push-action@v4
         with:
-          context: ${{ env.WORKING_DIRECTORY }}
-          push: ${{ github.event_name != 'pull_request' }}
+          context: .
+          file: ${{ env.WORKING_DIRECTORY }}/Dockerfile
+          push: false # ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
