@@ -49,7 +49,10 @@ jobs:
         with:
           images: ${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=sha
+            type=sha,prefix=
+          labels: |
+            org.opencontainers.image.title=vanilla
+            org.opencontainers.image.description=The central cluster manager for Beemo.
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v4
