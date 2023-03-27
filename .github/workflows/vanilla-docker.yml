@@ -10,6 +10,8 @@ on:
 
 env:
   WORKING_DIRECTORY: ${{ github.workspace }}/vanilla
+  CONTAINER_REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository_owner }}/vanilla
 
 jobs:
   build:
@@ -37,7 +39,7 @@ jobs:
         if: github.event_name != 'pull_request'
         uses: docker/login-action@v2
         with:
-          registry: ghcr.io
+          registry: ${{ env.CONTAINER_REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
@@ -45,7 +47,9 @@ jobs:
         uses: docker/metadata-action@v4
         id: meta
         with:
-          images: ghcr.io/${{ github.repository }}
+          images: ${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v4
