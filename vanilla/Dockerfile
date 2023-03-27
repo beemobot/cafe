@@ -19,6 +19,6 @@ WORKDIR /app
 COPY --from=build /gradle/build/install/vanilla/ .
 
 RUN addgroup -S -g 1337 vanilla && adduser -S -D -H -u 1337 -s /sbin/nologin -G vanilla vanilla
-USER matcha:matcha
+USER vanilla:vanilla
 
 ENTRYPOINT ["sh", "bin/vanilla"]

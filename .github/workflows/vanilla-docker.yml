@@ -1,21 +1,26 @@
-name: Publish Docker Container
+name: Publish Vanilla Docker Container
 
 on:
   push:
+    paths:
+      - vanilla/**
     branches:
       - main
 
+env:
+  WORKING_DIRECTORY: ${{ github.workspace }}/vanilla
+
 jobs:
   build:
-
-    defaults:
-      run:
-        working-directory: vanilla
 
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
+
+    defaults:
+      run:
+        working-directory: ${{ env.WORKING_DIRECTORY }}
 
     steps:
       - uses: actions/checkout@v3

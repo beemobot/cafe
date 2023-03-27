@@ -1,5 +1,5 @@
 {
-    "name": "@beemobot/common",
+    "name": "@beemobot/water",
     "version": "1.0.0",
     "author": "Beemo Devs (https://beemo.gg)",
     "license": "MIT",
@@ -17,6 +17,11 @@
         "kafkajs": "^2.2.3"
     },
     "devDependencies": {
+        "@types/node": "^18.11.18",
+        "@typescript-eslint/eslint-plugin": "^5.48.0",
+        "@typescript-eslint/parser": "^5.48.0",
+        "eslint": "^8.31.0",
+        "eslint-plugin-import": "^2.26.0",
         "typescript": "^4.9.4"
     }
 }

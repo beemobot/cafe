@@ -1,18 +1,23 @@
-name: Gradle CI
+name: Build Vanilla
 
 on:
-  - push
+  push:
+    paths:
+      - vanilla/**
+
+env:
+  WORKING_DIRECTORY: ${{ github.workspace }}/vanilla
 
 jobs:
   build:
 
-    defaults:
-      run:
-        working-directory: vanilla
-
     runs-on: ubuntu-latest
     permissions:
       contents: read
+
+    defaults:
+      run:
+        working-directory: ${{ env.WORKING_DIRECTORY }}
 
     steps:
 
@@ -32,4 +37,5 @@ jobs:
         uses: gradle/gradle-build-action@v2
         with:
           arguments: build
+          build-root-directory: ${{ env.WORKING_DIRECTORY }}
           cache-read-only: false

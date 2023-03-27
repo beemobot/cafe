@@ -6,9 +6,9 @@ import gg.beemo.latte.kafka.KafkaConnection;
 import gg.beemo.latte.logging.LoggerKt;
 import org.apache.logging.log4j.Logger;
 
-public class Matcha {
+public class Vanilla {
 
-    private static final Logger LOGGER = LoggerKt.getLogger(Matcha.class);
+    private static final Logger LOGGER = LoggerKt.getLogger(Vanilla.class);
 
     public static void main(String[] args) {
         LOGGER.debug("Loading configuration");
@@ -18,9 +18,9 @@ public class Matcha {
             LOGGER.debug("Initializing Kafka connection");
             KafkaConnection kafkaConnection = new KafkaConnection(
                     Config.KAFKA_HOST,
-                    "matcha",
-                    "matcha",
-                    CommonConfig.MATCHA_CLUSTER_ID
+                    "vanilla",
+                    "vanilla",
+                    CommonConfig.VANILLA_CLUSTER_ID
             );
 
             LOGGER.debug("Initializing Kafka Ratelimit client");
