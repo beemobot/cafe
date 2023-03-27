@@ -1,11 +1,12 @@
 name: Publish Vanilla Docker Container
 
 on:
-  push:
-    paths:
-      - vanilla/**
-    branches:
-      - main
+  - push
+#  push:
+#    paths:
+#      - vanilla/**
+#    branches:
+#      - main
 
 env:
   WORKING_DIRECTORY: ${{ github.workspace }}/vanilla
@@ -58,6 +59,6 @@ jobs:
         with:
           context: .
           file: ${{ env.WORKING_DIRECTORY }}/Dockerfile
-          push: ${{ github.event_name != 'pull_request' }}
+          push: true # ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
