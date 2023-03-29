@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - vanilla/**
+      - latte/**
 
 env:
   WORKING_DIRECTORY: ${{ github.workspace }}/vanilla
