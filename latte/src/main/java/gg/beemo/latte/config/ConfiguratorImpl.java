@@ -10,15 +10,15 @@ import org.jetbrains.annotations.Nullable;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.nio.file.Files;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class ConfiguratorImpl implements Configurator {
 
     private static final Map<Class<?>, ConfiguratorAdapter<?>> adapters = new HashMap<>();
+    private static final Set<Field> redactedFields = new HashSet<>();
 
     private final Map<String, String> environments = new ConcurrentHashMap<>();
     private boolean allowDefaultToSystemEnvironment = true;
@@ -93,7 +93,8 @@ public class ConfiguratorImpl implements Configurator {
                 }
                 return;
             }
-            LOGGER.debug("Setting variable {}={}", name, value);
+            String logValue = redactedFields.contains(field) ? "*****<REDACTED>*****" : value;
+            LOGGER.debug("Setting variable {}={}", name, logValue);
 
             if (!field.trySetAccessible()) {
                 LOGGER.error("Configurator failed to mark field {} as accessible", field.getName());
@@ -152,5 +153,13 @@ public class ConfiguratorImpl implements Configurator {
      */
     public static void addAdapter(Class<?> clazz, ConfiguratorAdapter<?> adapter) {
         adapters.put(clazz, adapter);
+    }
+    /**
+     * Marks a field as redacted, meaning its value will not be logged during initialization.
+     *
+     * @param field The Field to redact in logs.
+     */
+    public static void addRedactedField(Field field) {
+        redactedFields.add(field);
     }
 }
