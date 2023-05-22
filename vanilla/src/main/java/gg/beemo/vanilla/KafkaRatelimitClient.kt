@@ -1,4 +1,4 @@
-package gg.beemo.vanilla;
+package gg.beemo.vanilla
 
 import gg.beemo.latte.kafka.KafkaClient
 import gg.beemo.latte.kafka.KafkaConnection
