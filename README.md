@@ -1,6 +1,7 @@
 ### Cafe
 
-The Beemo Cafe is a mono-repo containing all the public microservices that Beemo will, or is utilizing. In this mono-repo contains the following services:
+The Beemo Cafe is a monorepo containing all the public microservices that are powering Beemo. The repo consists of the following services:
+
 |                              Name                             |     Purpose     |                                     Description                                     |
 |:-------------------------------------------------------------:|:---------------:|:-----------------------------------------------------------------------------------:|
 |   [Latte](https://github.com/beemobot/cafe/tree/main/latte)   |     Commons     |  A set of Java-Kotlin commons that are used all over Beemo's Java-Kotlin services.  |
