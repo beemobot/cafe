@@ -1,6 +1,7 @@
 package gg.beemo.latte.config;
 
 import gg.beemo.latte.config.annotations.ConfiguratorIgnore;
+import gg.beemo.latte.config.annotations.ConfiguratorRedacted;
 import gg.beemo.latte.config.annotations.ConfiguratorRename;
 import gg.beemo.latte.config.annotations.ConfiguratorRequired;
 import gg.beemo.latte.logging.LoggerKt;
@@ -10,7 +11,6 @@ import org.jetbrains.annotations.Nullable;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
-import java.lang.reflect.Field;
 import java.nio.file.Files;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -18,7 +18,6 @@ import java.util.concurrent.ConcurrentHashMap;
 public class ConfiguratorImpl implements Configurator {
 
     private static final Map<Class<?>, ConfiguratorAdapter<?>> adapters = new HashMap<>();
-    private static final Set<Field> redactedFields = new HashSet<>();
 
     private final Map<String, String> environments = new ConcurrentHashMap<>();
     private boolean allowDefaultToSystemEnvironment = true;
@@ -93,7 +92,8 @@ public class ConfiguratorImpl implements Configurator {
                 }
                 return;
             }
-            String logValue = redactedFields.contains(field) ? "*****<REDACTED>*****" : value;
+            boolean isRedacted = field.isAnnotationPresent(ConfiguratorRedacted.class);
+            String logValue = isRedacted ? "*****<REDACTED>*****" : value;
             LOGGER.debug("Setting variable {}={}", name, logValue);
 
             if (!field.trySetAccessible()) {
@@ -154,12 +154,5 @@ public class ConfiguratorImpl implements Configurator {
     public static void addAdapter(Class<?> clazz, ConfiguratorAdapter<?> adapter) {
         adapters.put(clazz, adapter);
     }
-    /**
-     * Marks a field as redacted, meaning its value will not be logged during initialization.
-     *
-     * @param field The Field to redact in logs.
-     */
-    public static void addRedactedField(Field field) {
-        redactedFields.add(field);
-    }
+
 }

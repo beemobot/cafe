@@ -3,7 +3,6 @@ package gg.beemo.latte.config;
 import gg.beemo.latte.config.annotations.ConfiguratorIgnore;
 import org.jetbrains.annotations.Nullable;
 import java.io.File;
-import java.lang.reflect.Field;
 
 public interface Configurator {
 
@@ -49,15 +48,6 @@ public interface Configurator {
      */
     static void addAdapter(Class<?> clazz, ConfiguratorAdapter<?>  adapter) {
         ConfiguratorImpl.addAdapter(clazz, adapter);
-    }
-
-    /**
-     * Marks a field as redacted, meaning its value will not be logged during initialization.
-     *
-     * @param field The Field to redact in logs.
-     */
-    static void addRedactedField(Field field) {
-        ConfiguratorImpl.addRedactedField(field);
     }
 
     /**
