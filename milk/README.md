@@ -1,7 +1,6 @@
 ##
 
-Milk is the module for handling message archival, and raid logs on Beemo, it can serve as either or both a scalable writer to the database for raids 
-and message archives, or an open, and scalable web server for the public to read logs from.
+Milk is the module for handling raid logs on Beemo, it can serve as either or both a scalable writer to the database for raids, or an open, and scalable web server for the public to read logs from.
 
 ### 📦 Setup
 

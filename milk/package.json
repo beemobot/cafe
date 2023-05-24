@@ -16,11 +16,13 @@
     "typescript": "^4.9.4"
   },
   "scripts": {
-    "build": "rm -rf dist/ && tsc",
-    "serve": "node --enable-source-maps dist/index.js"
+    "build": "rimraf dist && tsc",
+    "serve": "node --enable-source-maps dist/index.js",
+    "clean": "rimraf dist"
   },
   "devDependencies": {
     "@types/node": "^18.11.18",
-    "prisma": "^4.8.1"
+    "prisma": "^4.8.1",
+    "rimraf": "^5.0.1"
   }
 }
