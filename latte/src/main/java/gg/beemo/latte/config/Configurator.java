@@ -2,7 +2,6 @@ package gg.beemo.latte.config;
 
 import gg.beemo.latte.config.annotations.ConfiguratorIgnore;
 import org.jetbrains.annotations.Nullable;
-
 import java.io.File;
 
 public interface Configurator {

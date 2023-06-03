@@ -1,7 +1,7 @@
 package gg.beemo.latte.config;
 
 import gg.beemo.latte.config.annotations.ConfiguratorIgnore;
-import gg.beemo.latte.config.annotations.ConfiguratorDefault;
+import gg.beemo.latte.config.annotations.ConfiguratorRedacted;
 import gg.beemo.latte.config.annotations.ConfiguratorRename;
 import gg.beemo.latte.config.annotations.ConfiguratorRequired;
 import gg.beemo.latte.logging.LoggerKt;
@@ -12,9 +12,7 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class ConfiguratorImpl implements Configurator {
@@ -81,67 +79,59 @@ public class ConfiguratorImpl implements Configurator {
                 return;
             }
 
-            if (field.trySetAccessible()) {
-                String name = field.getName();
+            String name = field.getName();
+            if (field.isAnnotationPresent(ConfiguratorRename.class)) {
+                name = field.getAnnotation(ConfiguratorRename.class).actualKeyName();
+            }
 
-                if (field.isAnnotationPresent(ConfiguratorRename.class)) {
-                    name = field.getAnnotation(ConfiguratorRename.class).actualKeyName();
+            String value = get(name);
+            if (value == null) {
+                if (field.isAnnotationPresent(ConfiguratorRequired.class)) {
+                    LOGGER.error("Configurator variable {} was not provided!", name);
+                    System.exit(1);
                 }
+                return;
+            }
+            boolean isRedacted = field.isAnnotationPresent(ConfiguratorRedacted.class);
+            String logValue = isRedacted ? "*****<REDACTED>*****" : value;
+            LOGGER.debug("Setting variable {}={}", name, logValue);
 
-                String value = get(name);
-                if (value == null) {
-                    if (field.isAnnotationPresent(ConfiguratorDefault.class)) {
-                        value = field.getAnnotation(ConfiguratorDefault.class).defaultValue();
-                    } else {
-                        LOGGER.warn("Configurator failed to find a value for a field. [field={}]", field.getName());
-                    }
-                }
+            if (!field.trySetAccessible()) {
+                LOGGER.error("Configurator failed to mark field {} as accessible", field.getName());
+                System.exit(1);
+            }
 
-                try {
-                    Class<?> type = field.getType();
+            try {
+                Class<?> type = field.getType();
 
-                    // Sometimes, you may want this to be null?
-                    if (value == null) {
-                        if (field.isAnnotationPresent(ConfiguratorRequired.class)) {
-                            LOGGER.error("{} was not provided during startup!", name);
-                            System.exit(1);
-                        } else {
-                            field.set(field, null);
-                        }
-                    } else {
-                        if (isTypeEither(type, Boolean.class, boolean.class)) {
-                            field.setBoolean(field, Boolean.parseBoolean(value));
-                        } else if (isTypeEither(type, Integer.class, int.class)) {
-                            field.setInt(field, Integer.parseInt(value));
-                        } else if (isTypeEither(type, Long.class, long.class)) {
-                            field.setLong(field, Long.parseLong(value));
-                        } else if (isTypeEither(type, Double.class, double.class)) {
-                            field.setDouble(field, Double.parseDouble(value));
-                        } else if (type.equals(String.class)) {
-                            field.set(field, value);
-                        } else if (adapters.containsKey(type)) {
-                            field.set(field, adapters.get(type).transform(name, value, this));
-                        } else {
-                            LOGGER.error("Configurator failed to find a proper transformer or adapter for a field. " +
-                                    "Please use ConfiguratorIgnore to ignore otherwise add an adapter via Configurator.addAdapter(...). [field={}]", field.getName());
-                            System.exit(1);
-                        }
-                    }
-
-                } catch (IllegalAccessException | NumberFormatException e) {
-                    LOGGER.error("Configurator encountered an throwable while attempting to convert a field. [field={}]", field.getName(), e);
+                if (isTypeEither(type, Boolean.class, boolean.class)) {
+                    field.setBoolean(field, Boolean.parseBoolean(value));
+                } else if (isTypeEither(type, Integer.class, int.class)) {
+                    field.setInt(field, Integer.parseInt(value));
+                } else if (isTypeEither(type, Long.class, long.class)) {
+                    field.setLong(field, Long.parseLong(value));
+                } else if (isTypeEither(type, Double.class, double.class)) {
+                    field.setDouble(field, Double.parseDouble(value));
+                } else if (type.equals(String.class)) {
+                    field.set(field, value);
+                } else if (adapters.containsKey(type)) {
+                    field.set(field, adapters.get(type).transform(name, value, this));
+                } else {
+                    LOGGER.error("Configurator failed to find a proper transformer or adapter for a field. " +
+                            "Please use ConfiguratorIgnore to ignore otherwise add an adapter via Configurator.addAdapter(...). [field={}]", field.getName());
                     System.exit(1);
                 }
 
-            } else {
-                LOGGER.error("Configurator failed to set a field accessible. [field={}]", field.getName());
+            } catch (IllegalAccessException | NumberFormatException e) {
+                LOGGER.error("Configurator encountered an throwable while attempting to convert a field. [field={}]", field.getName(), e);
                 System.exit(1);
             }
+
         });
     }
 
     /**
-     * An convenient helper method to identify whether the type specified is
+     * A convenient helper method to identify whether the type specified is
      * either of these two. This is used against generic types which always has two
      * types of classes.
      *
@@ -164,4 +154,5 @@ public class ConfiguratorImpl implements Configurator {
     public static void addAdapter(Class<?> clazz, ConfiguratorAdapter<?> adapter) {
         adapters.put(clazz, adapter);
     }
+
 }
