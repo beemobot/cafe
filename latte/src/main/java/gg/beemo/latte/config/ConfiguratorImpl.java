@@ -1,9 +1,6 @@
 package gg.beemo.latte.config;
 
-import gg.beemo.latte.config.annotations.ConfiguratorIgnore;
-import gg.beemo.latte.config.annotations.ConfiguratorRedacted;
-import gg.beemo.latte.config.annotations.ConfiguratorRename;
-import gg.beemo.latte.config.annotations.ConfiguratorRequired;
+import gg.beemo.latte.config.annotations.*;
 import gg.beemo.latte.logging.LoggerKt;
 import org.apache.logging.log4j.Logger;
 import org.jetbrains.annotations.Nullable;
@@ -11,6 +8,8 @@ import org.jetbrains.annotations.Nullable;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
+import java.lang.reflect.Array;
+import java.lang.reflect.Field;
 import java.nio.file.Files;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -92,34 +91,47 @@ public class ConfiguratorImpl implements Configurator {
                 }
                 return;
             }
-            boolean isRedacted = field.isAnnotationPresent(ConfiguratorRedacted.class);
-            String logValue = isRedacted ? "*****<REDACTED>*****" : value;
-            LOGGER.debug("Setting variable {}={}", name, logValue);
+            if (value.equals("null")) {
+                value = null;
+            }
 
             if (!field.trySetAccessible()) {
                 LOGGER.error("Configurator failed to mark field {} as accessible", field.getName());
                 System.exit(1);
             }
 
-            try {
-                Class<?> type = field.getType();
+            ConfiguratorArray arrayAnnotation = field.getAnnotation(ConfiguratorArray.class);
+            String[] arrayValues = null;
+            Class<?> valueType = field.getType();
+            boolean isArray = valueType.isArray();
 
-                if (isTypeEither(type, Boolean.class, boolean.class)) {
-                    field.setBoolean(field, Boolean.parseBoolean(value));
-                } else if (isTypeEither(type, Integer.class, int.class)) {
-                    field.setInt(field, Integer.parseInt(value));
-                } else if (isTypeEither(type, Long.class, long.class)) {
-                    field.setLong(field, Long.parseLong(value));
-                } else if (isTypeEither(type, Double.class, double.class)) {
-                    field.setDouble(field, Double.parseDouble(value));
-                } else if (type.equals(String.class)) {
-                    field.set(field, value);
-                } else if (adapters.containsKey(type)) {
-                    field.set(field, adapters.get(type).transform(name, value, this));
+            if (isArray) {
+
+                valueType = valueType.getComponentType();
+                String valueDelimiter = arrayAnnotation != null ? arrayAnnotation.delimiter() : ",";
+                arrayValues = value != null ? value.split(valueDelimiter) : new String[]{};
+
+            } else if (arrayAnnotation != null) {
+                LOGGER.error("Field {} is annotated with @ConfiguratorArray even though it's not an Array type", field.getName());
+                System.exit(1);
+            }
+
+            boolean isRedacted = field.isAnnotationPresent(ConfiguratorRedacted.class);
+            String logValue = isRedacted ? "*****<REDACTED>*****" : isArray ? String.join(",", arrayValues) : value;
+            LOGGER.debug("Setting variable {}={}", name, logValue);
+
+            try {
+
+                if (!isArray) {
+                    Object parsedValue = parseValueOfType(field, valueType, name, value);
+                    field.set(field, parsedValue);
                 } else {
-                    LOGGER.error("Configurator failed to find a proper transformer or adapter for a field. " +
-                            "Please use ConfiguratorIgnore to ignore otherwise add an adapter via Configurator.addAdapter(...). [field={}]", field.getName());
-                    System.exit(1);
+                    Object array = Array.newInstance(valueType, arrayValues.length);
+                    for (int i = 0; i < arrayValues.length; i++) {
+                        Object parsedValue = parseValueOfType(field, valueType, name, arrayValues[i]);
+                        Array.set(array, i, parsedValue);
+                    }
+                    field.set(field, array);
                 }
 
             } catch (IllegalAccessException | NumberFormatException e) {
@@ -128,6 +140,39 @@ public class ConfiguratorImpl implements Configurator {
             }
 
         });
+    }
+
+    /**
+     * Parses a given String value into the type given by the type parameter.
+     *
+     * @param field The field this value conversion is for.
+     * @param type  The type to convert the given value into.
+     * @param name  The name of the field this value conversion is for.
+     * @param value The actual String value to convert.
+     * @return The converted value.
+     * @throws NumberFormatException if the value should be converted to a number type but is not a well-formed number.
+     */
+    private Object parseValueOfType(Field field, Class<?> type, String name, String value) throws NumberFormatException {
+        if (type.equals(String.class)) {
+            return value;
+        } else if (isTypeEither(type, Boolean.class, boolean.class)) {
+            return Boolean.parseBoolean(value);
+        } else if (isTypeEither(type, Integer.class, int.class)) {
+            return Integer.parseInt(value);
+        } else if (isTypeEither(type, Long.class, long.class)) {
+            return Long.parseLong(value);
+        } else if (isTypeEither(type, Float.class, float.class)) {
+            return Float.parseFloat(value);
+        } else if (isTypeEither(type, Double.class, double.class)) {
+            return Double.parseDouble(value);
+        } else if (adapters.containsKey(type)) {
+            return adapters.get(type).transform(name, value, this);
+        }
+
+        LOGGER.error("Configurator failed to find a proper adapter for the field {}. " +
+                "Use either ConfiguratorIgnore to ignore this field, or add a matching adapter via Configurator.addAdapter(...).", field.getName());
+        System.exit(1);
+        return null; // Required
     }
 
     /**

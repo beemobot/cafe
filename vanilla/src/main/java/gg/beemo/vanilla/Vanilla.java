@@ -17,7 +17,7 @@ public class Vanilla {
         try {
             LOGGER.debug("Initializing Kafka connection");
             KafkaConnection kafkaConnection = new KafkaConnection(
-                    Config.KAFKA_HOST,
+                    String.join(",", Config.KAFKA_HOST),
                     "vanilla",
                     "vanilla",
                     CommonConfig.VANILLA_CLUSTER_ID
