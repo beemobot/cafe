@@ -3,7 +3,6 @@ package gg.beemo.latte.broker
 import com.squareup.moshi.Moshi
 import gg.beemo.latte.logging.log
 import gg.beemo.latte.util.SuspendingCountDownLatch
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import java.util.Collections
@@ -20,7 +19,7 @@ fun interface BrokerMessageListener<T : Any> {
 }
 
 open class BrokerClient<T : Any>(
-    private val connection: IBrokerConnection<IBrokerMessageHeaders>,
+    private val connection: BrokerConnection,
     type: Class<T>,
     private val topicName: String
 ) {
@@ -43,7 +42,7 @@ open class BrokerClient<T : Any>(
     protected suspend fun send(
         key: String,
         obj: T?,
-        headers: IBrokerMessageHeaders = this.connection.createHeaders(),
+        headers: BaseBrokerMessageHeaders = this.connection.createHeaders(),
         blocking: Boolean = true,
     ): String {
         return connection.send(topicName, key, stringify(obj), headers, blocking)
@@ -148,12 +147,12 @@ open class BrokerClient<T : Any>(
         return adapter.toJson(obj)
     }
 
-    private suspend fun onTopicMessage(key: String, value: String, headers: IBrokerMessageHeaders) = coroutineScope {
+    private suspend fun onTopicMessage(key: String, value: String, headers: BaseBrokerMessageHeaders) = coroutineScope {
         val obj = parse(value)
         val msg = BrokerMessage(this@BrokerClient, key, obj, headers)
         val listeners = keyListeners[key]
         for (listener in listeners ?: return@coroutineScope) {
-            launch(Dispatchers.Default) {
+            launch {
                 try {
                     listener.onMessage(msg)
                 } catch (t: Throwable) {

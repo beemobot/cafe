@@ -1,22 +1,20 @@
-package gg.beemo.latte.broker
+package gg.beemo.latte.broker.kafka
 
 import gg.beemo.latte.CommonConfig
-import gg.beemo.latte.broker.IBrokerMessageHeaders.Companion.HEADER_CLIENT_ID
-import gg.beemo.latte.broker.IBrokerMessageHeaders.Companion.HEADER_REQUEST_ID
-import gg.beemo.latte.broker.IBrokerMessageHeaders.Companion.HEADER_SOURCE_CLUSTER
-import gg.beemo.latte.broker.IBrokerMessageHeaders.Companion.HEADER_TARGET_CLUSTERS
+import gg.beemo.latte.broker.BaseBrokerMessageHeaders
 import org.apache.kafka.common.header.Headers
-import java.util.UUID
 
 class KafkaMessageHeaders(
-    override val clientId: String,
-    override val sourceCluster: String,
+    clientId: String,
+    sourceCluster: String,
     targetClusters: Set<String>?,
     requestId: String?,
-) : IBrokerMessageHeaders {
-
-    override val targetClusters: Set<String> = targetClusters ?: emptySet()
-    override val requestId: String = requestId ?: UUID.randomUUID().toString()
+) : BaseBrokerMessageHeaders(
+    clientId,
+    sourceCluster,
+    targetClusters,
+    requestId
+) {
 
     constructor(headers: Headers) : this(
         headers.getOrDefault(HEADER_CLIENT_ID, "default"),

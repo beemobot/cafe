@@ -4,7 +4,7 @@ data class BrokerMessage<T : Any>(
     val client: BrokerClient<T>,
     val key: String,
     val value: T?,
-    val headers: IBrokerMessageHeaders
+    val headers: BaseBrokerMessageHeaders
 ) {
 
     suspend fun respond(data: T?, blocking: Boolean = true) {

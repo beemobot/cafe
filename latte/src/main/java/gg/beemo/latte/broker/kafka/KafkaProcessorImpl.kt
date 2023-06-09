@@ -1,4 +1,4 @@
-package gg.beemo.latte.broker
+package gg.beemo.latte.broker.kafka
 
 import org.apache.kafka.streams.processor.api.Processor
 import org.apache.kafka.streams.processor.api.ProcessorContext
