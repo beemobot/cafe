@@ -1,5 +1,6 @@
 package gg.beemo.latte.broker
 
+import gg.beemo.latte.CommonConfig
 import gg.beemo.latte.broker.IBrokerMessageHeaders.Companion.HEADER_CLIENT_ID
 import gg.beemo.latte.broker.IBrokerMessageHeaders.Companion.HEADER_REQUEST_ID
 import gg.beemo.latte.broker.IBrokerMessageHeaders.Companion.HEADER_SOURCE_CLUSTER
@@ -19,7 +20,7 @@ class KafkaMessageHeaders(
 
     constructor(headers: Headers) : this(
         headers.getOrDefault(HEADER_CLIENT_ID, "default"),
-        headers.getOrDefault(HEADER_SOURCE_CLUSTER, INVALID_CLUSTER_ID.toString()),
+        headers.getOrDefault(HEADER_SOURCE_CLUSTER, CommonConfig.INVALID_CLUSTER_ID),
         headers.getOrDefault(HEADER_TARGET_CLUSTERS, "")
             .split(",")
             .filter { it.isNotEmpty() }
@@ -32,12 +33,6 @@ class KafkaMessageHeaders(
         headers.add(HEADER_TARGET_CLUSTERS, targetClusters.joinToString(",").toByteArray())
         headers.add(HEADER_REQUEST_ID, requestId.toByteArray())
         headers.add(HEADER_SOURCE_CLUSTER, sourceCluster.toByteArray())
-    }
-
-    companion object {
-
-        const val INVALID_CLUSTER_ID = Integer.MIN_VALUE
-
     }
 
 }
