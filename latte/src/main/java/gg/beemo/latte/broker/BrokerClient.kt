@@ -83,14 +83,9 @@ open class BrokerClient<T : Any>(
         on(responseKey, cb)
         var timeoutReached = false
         try {
-            requestId.set(
-                send(
-                    key,
-                    obj,
-                    this.connection.createHeaders(targetClusters),
-                    blocking,
-                )
-            )
+            val headers = this.connection.createHeaders(targetClusters)
+            requestId.set(headers.requestId)
+            send(key, obj, headers, blocking)
 
             if (timeout <= Duration.ZERO) {
                 latch.await()
