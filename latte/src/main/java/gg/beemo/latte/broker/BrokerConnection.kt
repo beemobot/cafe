@@ -55,7 +55,7 @@ abstract class BrokerConnection {
         }
     }
 
-    protected fun maybeShortCircuitOutgoingMessage(
+    protected fun shouldDispatchExternallyAfterShortCircuit(
         topic: String,
         key: String,
         value: String,

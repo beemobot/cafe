@@ -51,7 +51,7 @@ class KafkaConnection(
             throw IllegalArgumentException("KafkaConnection requires headers of type KafkaMessageHeaders to be passed, got ${headers.javaClass.name} instead")
         }
 
-        if (maybeShortCircuitOutgoingMessage(topic, key, value, headers)) {
+        if (shouldDispatchExternallyAfterShortCircuit(topic, key, value, headers)) {
 
             val producer = this.producer ?: throw IllegalStateException("Producer is not initialized")
             val record = ProducerRecord(topic, key, value)
