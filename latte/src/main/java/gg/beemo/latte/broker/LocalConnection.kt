@@ -1,9 +1,10 @@
 package gg.beemo.latte.broker
 
-class LocalConnection : BrokerConnection() {
+class LocalConnection(
+    override val clusterId: String = "local-cluster-id",
+) : BrokerConnection() {
 
     override val clientId = "local-client-id"
-    override val clusterId = "local-cluster-id"
 
     override suspend fun send(
         topic: String,
