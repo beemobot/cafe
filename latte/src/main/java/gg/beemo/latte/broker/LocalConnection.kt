@@ -14,7 +14,7 @@ class LocalConnection(
         blocking: Boolean,
     ): String {
         if (maybeShortCircuitOutgoingMessage(topic, key, value, headers) && headers.targetClusters.isNotEmpty()) {
-            throw IllegalArgumentException("Attempting to send message to other cluster(s) [${headers.targetClusters}] in a LocalConnection")
+            throw IllegalArgumentException("Attempting to send message to other cluster(s) ${headers.targetClusters} in a LocalConnection")
         }
 
         return headers.requestId
