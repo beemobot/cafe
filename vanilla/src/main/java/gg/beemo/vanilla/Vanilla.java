@@ -1,8 +1,9 @@
 package gg.beemo.vanilla;
 
 import gg.beemo.latte.CommonConfig;
+import gg.beemo.latte.broker.BrokerConnection;
+import gg.beemo.latte.broker.kafka.KafkaConnection;
 import gg.beemo.latte.config.Configurator;
-import gg.beemo.latte.kafka.KafkaConnection;
 import gg.beemo.latte.logging.LoggerKt;
 import org.apache.logging.log4j.Logger;
 
@@ -16,8 +17,8 @@ public class Vanilla {
 
         try {
             LOGGER.debug("Initializing Kafka connection");
-            KafkaConnection kafkaConnection = new KafkaConnection(
-                    String.join(",", Config.KAFKA_HOST),
+            BrokerConnection kafkaConnection = new KafkaConnection(
+                    Config.KAFKA_HOST,
                     "vanilla",
                     "vanilla",
                     CommonConfig.VANILLA_CLUSTER_ID
