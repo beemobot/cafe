@@ -1,5 +1,4 @@
-import {BrokerClient, IBrokerConnection} from "@beemobot/common";
-// ^ This needs to be updated; Probably @beemobot/cafe
+import {BrokerClient, IBrokerConnection} from "@beemobot/water";
 import {Record, Static, String} from "runtypes";
 
 export const KEY_SET_PREMIUM_PLAN = "set-premium-plan"

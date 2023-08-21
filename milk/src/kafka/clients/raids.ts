@@ -1,5 +1,4 @@
-import {BrokerClient, KafkaConnection} from "@beemobot/common";
-// ^ This needs to be updated; Probably @beemobot/cafe
+import {BrokerClient, KafkaConnection} from "@beemobot/water";
 import {prisma} from "../../index.js";
 import {StringUtil} from "../../utils/string.js";
 import {retriable} from "../../utils/retriable.js";

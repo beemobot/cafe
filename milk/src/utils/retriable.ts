@@ -1,6 +1,5 @@
 import * as Sentry from '@sentry/node';
-import {Logger} from "@beemobot/common";
-// ^ This needs to be updated; Probably @beemobot/cafe
+import {Logger} from "@beemobot/water";
 import {TAG} from "../index.js";
 
 export function retriable<T>(task: string, action: () => Promise<T>, retryEverySeconds: number = 10, maxRetries: number = -1, retries: number = 1): Promise<T> {

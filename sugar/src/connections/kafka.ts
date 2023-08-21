@@ -1,5 +1,4 @@
-import {KafkaConnection, Logger} from "@beemobot/common";
-// ^ This needs to be updated; Probably @beemobot/cafe
+import {KafkaConnection, Logger} from "@beemobot/water";
 import {TAG} from "../index.js";
 
 export let kafka: KafkaConnection

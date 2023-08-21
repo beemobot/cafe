@@ -1,5 +1,4 @@
-import {KafkaConnection} from "@beemobot/common";
-// ^ This needs to be updated; Probably @beemobot/cafe
+import {KafkaConnection} from "@beemobot/water";
 import {PremiumManagentClient} from "./clients/PremiumManagentClient.js";
 
 export let premiumManagementClient: PremiumManagentClient

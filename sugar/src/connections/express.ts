@@ -2,8 +2,7 @@ import express from "express";
 import expressBasicAuth from "express-basic-auth";
 import GetWebhookRoute from "../routes/PostWebhookRoute.js";
 import * as Sentry from '@sentry/node';
-import {Logger} from "@beemobot/common";
-// ^ This needs to be updated; Probably @beemobot/cafe
+import {Logger} from "@beemobot/water";
 import {TAG} from "../index.js";
 export const server = express()
 

@@ -1,5 +1,4 @@
-import {Logger} from "@beemobot/common";
-// ^ This needs to be updated; Probably @beemobot/cafe
+import {Logger} from "@beemobot/water";
 import {prisma, TAG} from "../index.js";
 async function init() {
     try {

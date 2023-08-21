@@ -1,7 +1,6 @@
-import {Logger} from "@beemobot/common";
-// ^ This needs to be updated; Probably @beemobot/cafe
+import {Logger} from "@beemobot/water";
 import {TAG} from "../index.js";
-import {MessagePayload, WebhookClient, WebhookCreateMessageOptions} from "discord.js";
+import {MessagePayload, WebhookClient, WebhookMessageCreateOptions} from "discord.js";
 import * as Sentry from "@sentry/node"
 
 export let webhook: WebhookClient | undefined
@@ -14,7 +13,7 @@ function init() {
     webhook = new WebhookClient({ url: process.env.DISCORD_WEBHOOK_URL })
 }
 
-function send(payload: string | MessagePayload | WebhookCreateMessageOptions) {
+function send(payload: string | MessagePayload | WebhookMessageCreateOptions) {
     if (webhook) {
         webhook.send(payload)
             .then(_ => {})

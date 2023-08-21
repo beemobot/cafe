@@ -1,5 +1,4 @@
-import {Logger} from "@beemobot/common";
-// ^ This needs to be updated; Probably @beemobot/cafe
+import {Logger} from "@beemobot/water";
 import {TAG} from "../index.js";
 import {ChargebeeCustomer, ChargebeeSubscription} from "../types/chargebee.js";
 import * as Sentry from '@sentry/node';

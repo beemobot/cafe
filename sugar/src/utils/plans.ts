@@ -2,8 +2,7 @@ import {ChargebeeCustomer, ChargebeeSubscription} from "../types/chargebee.js";
 import {NO_PLAN} from "./constants.js";
 import plans from "../../configs/plans.json";
 import {Server} from "../types/server.js";
-import {Logger} from "@beemobot/common";
-// ^ This needs to be updated; Probably @beemobot/cafe
+import {Logger} from "@beemobot/water";
 import {TAG} from "../index.js";
 import {kafka} from "../connections/kafka.js";
 import {KEY_SET_PREMIUM_PLAN, PREMIUM_PLAN_TOPIC} from "../kafka/clients/PremiumManagentClient.js";

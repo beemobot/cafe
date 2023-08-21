@@ -1,6 +1,5 @@
 import {ChargeBee} from "chargebee-typescript";
-import {Logger} from "@beemobot/common";
-// ^ This needs to be updated; Probably @beemobot/cafe
+import {Logger} from "@beemobot/water";
 import {TAG} from "../index.js";
 
 export let chargebee = new ChargeBee();

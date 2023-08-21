@@ -1,6 +1,5 @@
 import {prisma, TAG} from "../index.js";
-import {Logger} from "@beemobot/common";
-// ^ This needs to be updated; Probably @beemobot/cafe
+import {Logger} from "@beemobot/water";
 import {DateUtil} from "../utils/date.js";
 import {AntispamLogsCache} from "../cache/antispamLogsCache.js";
 import {FastifyInstance} from "fastify";

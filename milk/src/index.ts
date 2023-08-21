@@ -3,8 +3,7 @@ import dotenv from 'dotenv'
 import {Sentryboo} from "./connections/sentry.js";
 import {Koffaka} from "./connections/kafka.js";
 import {Prismae} from "./connections/prisma.js";
-import {Logger} from "@beemobot/common";
-// ^ This needs to be updated; Probably @beemobot/cafe
+import {Logger} from "@beemobot/water";
 import {Fastified} from "./connections/fastify.js";
 import * as Sentry from '@sentry/node'
 
