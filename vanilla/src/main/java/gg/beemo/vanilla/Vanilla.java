@@ -21,7 +21,8 @@ public class Vanilla {
                     Config.KAFKA_HOST,
                     "vanilla",
                     "vanilla",
-                    CommonConfig.VANILLA_CLUSTER_ID
+                    CommonConfig.VANILLA_CLUSTER_ID,
+                    Config.KAFKA_USE_TLS
             );
 
             LOGGER.debug("Initializing Kafka Ratelimit client");

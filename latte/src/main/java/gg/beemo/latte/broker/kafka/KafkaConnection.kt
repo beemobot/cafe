@@ -5,11 +5,13 @@ import gg.beemo.latte.broker.BrokerConnection
 import gg.beemo.latte.broker.TopicListener
 import gg.beemo.latte.logging.log
 import kotlinx.coroutines.*
+import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin.AdminClient
 import org.apache.kafka.clients.admin.NewTopic
 import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.clients.producer.ProducerConfig
 import org.apache.kafka.clients.producer.ProducerRecord
+import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.serialization.Serdes
 import org.apache.kafka.common.serialization.StringSerializer
 import org.apache.kafka.streams.KafkaStreams
@@ -28,6 +30,7 @@ class KafkaConnection(
     override val clientId: String,
     private val consumerGroupId: String,
     override val clusterId: String,
+    private val useTls: Boolean = false,
 ) : BrokerConnection() {
 
     private val kafkaHostsString = kafkaHosts.joinToString(",")
@@ -114,10 +117,9 @@ class KafkaConnection(
     private fun createTopics() {
         val listeningTopics = topicListeners.keys
         log.debug("Creating missing topics, target topics: $listeningTopics")
-        val props = Properties()
-        props[ProducerConfig.BOOTSTRAP_SERVERS_CONFIG] = kafkaHostsString
-
+        val props = createConnectionProperties()
         val client = AdminClient.create(props)
+
         val existingTopics = client.listTopics().names().get()
         val missingTopics = listeningTopics.filter { !existingTopics.contains(it) }
         log.debug("Missing topics: $missingTopics")
@@ -131,23 +133,15 @@ class KafkaConnection(
 
     private fun createProducer() {
         log.debug("Creating Producer")
-        val props = Properties()
+        val props = createConnectionProperties()
         props[ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG] = StringSerializer::class.qualifiedName
         props[ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG] = StringSerializer::class.qualifiedName
-        // Server to connect to
-        props[ProducerConfig.BOOTSTRAP_SERVERS_CONFIG] = kafkaHostsString
-        // Readable name of this client for debugging purposes
-        props[ProducerConfig.CLIENT_ID_CONFIG] = consumerGroupId
         // Require all broker replicas to have acknowledged the request
         props[ProducerConfig.ACKS_CONFIG] = "all"
         // Limit time send() can block waiting for topic metadata
         props[ProducerConfig.MAX_BLOCK_MS_CONFIG] = 10_000
-        // Max time for the server to respond to a request
-        props[ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG] = 10_000
         // Max time for the server to report successful delivery, including retries
         props[ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG] = 60_000
-        // Amount of times to retry a failed request
-        props[ProducerConfig.RETRIES_CONFIG] = 10
         // Enable idempotence logic stuff
         props[ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG] = true
         // Group requests sent within the same 1 ms window into a single batch
@@ -166,18 +160,13 @@ class KafkaConnection(
         }
         log.debug("Creating Consumer")
 
-        val props = Properties()
+        val props = createConnectionProperties()
         props[StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG] = Serdes.String().javaClass
         props[StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG] = Serdes.String().javaClass
-        // Server to connect to
-        props[StreamsConfig.BOOTSTRAP_SERVERS_CONFIG] = kafkaHostsString
         // Name of this client for group management
         props[StreamsConfig.APPLICATION_ID_CONFIG] = consumerGroupId
-        props[StreamsConfig.CLIENT_ID_CONFIG] = consumerGroupId
         // Max time a task may stall and retry due to errors
         props[StreamsConfig.TASK_TIMEOUT_MS_CONFIG] = 5_000
-        // Max time for the server to respond to a request
-        props[StreamsConfig.REQUEST_TIMEOUT_MS_CONFIG] = 10_000
         // "Note that exactly-once processing requires a cluster of at least three brokers by default"
         // - let's hope for the best
         props[StreamsConfig.PROCESSING_GUARANTEE_CONFIG] = StreamsConfig.EXACTLY_ONCE_V2
@@ -217,6 +206,20 @@ class KafkaConnection(
             start()
         }
         log.debug("Consumer has been created")
+    }
+
+    private fun createConnectionProperties(): Properties = Properties().apply {
+        // Server(s) to connect to
+        this[CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG] = kafkaHostsString
+        // Whether the servers use TLS or plaintext connections
+        this[CommonClientConfigs.SECURITY_PROTOCOL_CONFIG] =
+            if (useTls) SecurityProtocol.SSL.name else SecurityProtocol.PLAINTEXT.name
+        // Readable name of this client for debugging purposes
+        this[CommonClientConfigs.CLIENT_ID_CONFIG] = consumerGroupId
+        // Max time for the server to respond to a request
+        this[CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG] = 10_000
+        // Amount of times to retry a failed request
+        this[CommonClientConfigs.RETRIES_CONFIG] = 10
     }
 
     private fun handleIncomingRecord(topic: String, record: Record<String, String>) {
