@@ -1,12 +1,17 @@
-package gg.beemo.latte.kafka
+package gg.beemo.latte.broker.kafka
 
+import gg.beemo.latte.broker.BaseBrokerMessageHeaders
+import gg.beemo.latte.broker.BrokerConnection
+import gg.beemo.latte.broker.TopicListener
 import gg.beemo.latte.logging.log
 import kotlinx.coroutines.*
+import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin.AdminClient
 import org.apache.kafka.clients.admin.NewTopic
 import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.clients.producer.ProducerConfig
 import org.apache.kafka.clients.producer.ProducerRecord
+import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.serialization.Serdes
 import org.apache.kafka.common.serialization.StringSerializer
 import org.apache.kafka.streams.KafkaStreams
@@ -16,91 +21,61 @@ import org.apache.kafka.streams.errors.MissingSourceTopicException
 import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler
 import org.apache.kafka.streams.processor.api.ProcessorSupplier
 import org.apache.kafka.streams.processor.api.Record
+import java.lang.IllegalArgumentException
 import java.util.*
-import java.util.concurrent.CopyOnWriteArraySet
 
-fun interface TopicListener {
-    suspend fun onMessage(key: String, value: String, headers: KafkaRecordHeaders)
-}
 
 class KafkaConnection(
-    private val kafkaHost: String,
-    val clientId: String,
+    kafkaHosts: Array<String>,
+    override val clientId: String,
     private val consumerGroupId: String,
-    val currentClusterId: Int,
-) {
+    override val clusterId: String,
+    private val useTls: Boolean = false,
+) : BrokerConnection() {
+
+    private val kafkaHostsString = kafkaHosts.joinToString(",")
 
     private var producer: KafkaProducer<String, String>? = null
     private var consumer: KafkaStreams? = null
     private var shutdownHook: Thread? = null
 
-    private val subscribedTopics = Collections.synchronizedSet(mutableSetOf<String>())
-
-    private val topicListeners = Collections.synchronizedMap(HashMap<String, MutableSet<TopicListener>>())
-
-    private val eventDispatcherScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
-    private val eventDispatcherErrorHandler = CoroutineExceptionHandler { _, t ->
-        log.error("Uncaught error in internal Kafka record handler", t)
-    }
-
     private val isRunning: Boolean
         // The `shutdownHook` is assigned a value as the last step of `start()`
         get() = shutdownHook != null
 
-    suspend fun send(
+    override suspend fun send(
         topic: String,
         key: String,
         value: String,
-        headers: KafkaRecordHeaders,
-        blocking: Boolean = true,
+        headers: BaseBrokerMessageHeaders,
+        blocking: Boolean,
     ): String {
-        val producer = this.producer ?: throw IllegalStateException("Producer is not initialized")
-        val record = ProducerRecord(topic, key, value)
-        headers.applyTo(record.headers())
+        if (headers !is KafkaMessageHeaders) {
+            throw IllegalArgumentException("KafkaConnection requires headers of type KafkaMessageHeaders to be passed, got ${headers.javaClass.name} instead")
+        }
 
-        if (blocking) {
-            withContext(Dispatchers.IO) {
-                // This can block for up to max.block.ms while gathering metadata.
-                // The request itself will be sent async, once the metadata is fetched.
-                producer.send(record).get()
+        if (shouldDispatchExternallyAfterShortCircuit(topic, key, value, headers)) {
+
+            val producer = this.producer ?: throw IllegalStateException("Producer is not initialized")
+            val record = ProducerRecord(topic, key, value)
+            headers.applyTo(record.headers())
+
+            if (blocking) {
+                withContext(Dispatchers.IO) {
+                    // This can block for up to max.block.ms while gathering metadata.
+                    // The request itself will be sent async, once the metadata is fetched.
+                    producer.send(record).get()
+                }
+            } else {
+                // When no blocking is requested, just throw the message into the void and hope for the best.
+                producer.send(record)
             }
-        } else {
-            // When requesting no blocking, just throw the request into the void and hope for the best.
-            producer.send(record)
         }
 
-        // If the record is meant for ourselves (amongst other clusters),
-        // immediately dispatch it to the listeners.
-        if (headers.targetClusters.isEmpty() || currentClusterId in headers.targetClusters) {
-            invokeCallbacks(topic, key, value, headers)
-        }
         return headers.requestId
     }
 
-    fun on(topic: String, cb: TopicListener) {
-        val listeners = topicListeners.computeIfAbsent(topic) {
-            if (isRunning) {
-                throw IllegalStateException("Cannot subscribe to new topic after KafkaConnection has started")
-            }
-            subscribedTopics.add(topic)
-            CopyOnWriteArraySet()
-        }
-        listeners.add(cb)
-    }
-
-    fun off(topic: String, cb: TopicListener) {
-        topicListeners.computeIfPresent(topic) { _, listeners ->
-            listeners.remove(cb)
-            if (listeners.size == 0) {
-                subscribedTopics.remove(topic)
-                null
-            } else {
-                listeners
-            }
-        }
-    }
-
-    fun start() {
+    override fun start() {
         check(!isRunning) { "KafkaConnection is already running!" }
         log.debug("Starting Kafka Connection")
         createTopics()
@@ -115,26 +90,38 @@ class KafkaConnection(
         log.debug("Kafka Connection is fully initialized")
     }
 
-    fun destroy() {
+    override fun destroy() {
+        super.destroy()
         consumer?.close()
         consumer = null
         producer?.close()
         producer = null
         shutdownHook?.let { Runtime.getRuntime().removeShutdownHook(it) }
         shutdownHook = null
-        subscribedTopics.clear()
-        topicListeners.clear()
-        eventDispatcherScope.cancel()
+    }
+
+    override fun createHeaders(targetClusters: Set<String>?, requestId: String?): BaseBrokerMessageHeaders {
+        return KafkaMessageHeaders(this.clientId, this.clusterId, targetClusters, requestId)
+    }
+
+    override fun on(topic: String, cb: TopicListener) {
+        if (!topicListeners.containsKey(topic) && isRunning) {
+            // NOTE: It might be possible to recreate and reconnect the stream with new topics,
+            //       but at this point it's not worth the effort, given this kind of dynamic topic
+            //       addition doesn't happen in practice.
+            throw IllegalStateException("Cannot subscribe to new topic after KafkaConnection has started")
+        }
+        super.on(topic, cb)
     }
 
     private fun createTopics() {
-        log.debug("Creating missing topics, target topics: $subscribedTopics")
-        val props = Properties()
-        props[ProducerConfig.BOOTSTRAP_SERVERS_CONFIG] = kafkaHost
-
+        val listeningTopics = topicListeners.keys
+        log.debug("Creating missing topics, target topics: $listeningTopics")
+        val props = createConnectionProperties()
         val client = AdminClient.create(props)
+
         val existingTopics = client.listTopics().names().get()
-        val missingTopics = subscribedTopics.filter { !existingTopics.contains(it) }
+        val missingTopics = listeningTopics.filter { !existingTopics.contains(it) }
         log.debug("Missing topics: $missingTopics")
         if (missingTopics.isNotEmpty()) {
             client.createTopics(
@@ -146,23 +133,15 @@ class KafkaConnection(
 
     private fun createProducer() {
         log.debug("Creating Producer")
-        val props = Properties()
+        val props = createConnectionProperties()
         props[ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG] = StringSerializer::class.qualifiedName
         props[ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG] = StringSerializer::class.qualifiedName
-        // Server to connect to
-        props[ProducerConfig.BOOTSTRAP_SERVERS_CONFIG] = kafkaHost
-        // Readable name of this client for debugging purposes
-        props[ProducerConfig.CLIENT_ID_CONFIG] = consumerGroupId
         // Require all broker replicas to have acknowledged the request
         props[ProducerConfig.ACKS_CONFIG] = "all"
         // Limit time send() can block waiting for topic metadata
         props[ProducerConfig.MAX_BLOCK_MS_CONFIG] = 10_000
-        // Max time for the server to respond to a request
-        props[ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG] = 10_000
         // Max time for the server to report successful delivery, including retries
         props[ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG] = 60_000
-        // Amount of times to retry a failed request
-        props[ProducerConfig.RETRIES_CONFIG] = 10
         // Enable idempotence logic stuff
         props[ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG] = true
         // Group requests sent within the same 1 ms window into a single batch
@@ -175,24 +154,19 @@ class KafkaConnection(
     }
 
     private fun createConsumer() {
-        if (subscribedTopics.isEmpty()) {
+        if (topicListeners.isEmpty()) {
             log.warn("No topics have been subscribed to, not initializing Central Kafka Consumer")
             return
         }
         log.debug("Creating Consumer")
 
-        val props = Properties()
+        val props = createConnectionProperties()
         props[StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG] = Serdes.String().javaClass
         props[StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG] = Serdes.String().javaClass
-        // Server to connect to
-        props[StreamsConfig.BOOTSTRAP_SERVERS_CONFIG] = kafkaHost
         // Name of this client for group management
         props[StreamsConfig.APPLICATION_ID_CONFIG] = consumerGroupId
-        props[StreamsConfig.CLIENT_ID_CONFIG] = consumerGroupId
         // Max time a task may stall and retry due to errors
         props[StreamsConfig.TASK_TIMEOUT_MS_CONFIG] = 5_000
-        // Max time for the server to respond to a request
-        props[StreamsConfig.REQUEST_TIMEOUT_MS_CONFIG] = 10_000
         // "Note that exactly-once processing requires a cluster of at least three brokers by default"
         // - let's hope for the best
         props[StreamsConfig.PROCESSING_GUARANTEE_CONFIG] = StreamsConfig.EXACTLY_ONCE_V2
@@ -200,7 +174,7 @@ class KafkaConnection(
         props[StreamsConfig.COMMIT_INTERVAL_MS_CONFIG] = 100
 
         val streamsBuilder = StreamsBuilder()
-        val source = streamsBuilder.stream<String, String>(subscribedTopics)
+        val source = streamsBuilder.stream<String, String>(topicListeners.keys)
 
         source.process(ProcessorSupplier {
             KafkaProcessorImpl { record, context ->
@@ -234,32 +208,23 @@ class KafkaConnection(
         log.debug("Consumer has been created")
     }
 
-    private fun handleIncomingRecord(topic: String, record: Record<String, String>) =
-        eventDispatcherScope.launch(eventDispatcherErrorHandler) {
-            val headers = KafkaRecordHeaders(record.headers())
-            if (headers.targetClusters.isNotEmpty() && currentClusterId !in headers.targetClusters) {
-                // If there is a target cluster restriction and this record wasn't meant for us,
-                // discard it immediately without notifying any listeners.
-                return@launch
-            }
-            if (headers.sourceCluster == currentClusterId) {
-                // If this record was sent by ourselves, discard it too, as we already dispatch events
-                // to our listeners in `send()` to avoid the round trip through Kafka.
-                return@launch
-            }
-            invokeCallbacks(topic, record.key(), record.value(), headers)
-        }
+    private fun createConnectionProperties(): Properties = Properties().apply {
+        // Server(s) to connect to
+        this[CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG] = kafkaHostsString
+        // Whether the servers use TLS or plaintext connections
+        this[CommonClientConfigs.SECURITY_PROTOCOL_CONFIG] =
+            if (useTls) SecurityProtocol.SSL.name else SecurityProtocol.PLAINTEXT.name
+        // Readable name of this client for debugging purposes
+        this[CommonClientConfigs.CLIENT_ID_CONFIG] = consumerGroupId
+        // Max time for the server to respond to a request
+        this[CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG] = 10_000
+        // Amount of times to retry a failed request
+        this[CommonClientConfigs.RETRIES_CONFIG] = 10
+    }
 
-    private fun invokeCallbacks(topic: String, key: String, value: String, headers: KafkaRecordHeaders) =
-        eventDispatcherScope.launch(eventDispatcherErrorHandler) {
-            val listeners = topicListeners[topic]
-            for (listener in listeners ?: return@launch) {
-                try {
-                    listener.onMessage(key, value, headers)
-                } catch (t: Throwable) {
-                    log.error("Uncaught error in KafkaConnection listener", t)
-                }
-            }
-        }
+    private fun handleIncomingRecord(topic: String, record: Record<String, String>) {
+        val headers = KafkaMessageHeaders(record.headers())
+        handleIncomingMessage(topic, record.key(), record.value(), headers)
+    }
 
 }

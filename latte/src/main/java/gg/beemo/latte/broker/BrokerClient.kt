@@ -1,9 +1,8 @@
-package gg.beemo.latte.kafka
+package gg.beemo.latte.broker
 
 import com.squareup.moshi.Moshi
 import gg.beemo.latte.logging.log
 import gg.beemo.latte.util.SuspendingCountDownLatch
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import java.util.Collections
@@ -11,39 +10,39 @@ import java.util.concurrent.CopyOnWriteArraySet
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.time.Duration
 
-fun interface KafkaEventListener<T : Any> {
-    suspend fun onMessage(msg: KafkaMessage<T>)
+fun interface BrokerEventListener<T : Any> {
+    suspend fun onMessage(msg: BrokerMessage<T>)
 }
 
-fun interface KafkaMessageListener<T : Any> {
-    suspend fun onMessage(clusterId: Int, msg: KafkaMessage<T>)
+fun interface BrokerMessageListener<T : Any> {
+    suspend fun onMessage(clusterId: String, msg: BrokerMessage<T>)
 }
 
-open class KafkaClient<T : Any>(
-    private val connection: KafkaConnection,
+open class BrokerClient<T : Any>(
+    private val connection: BrokerConnection,
     type: Class<T>,
     private val topicName: String
 ) {
 
-    val currentClusterId: Int
-        get() = connection.currentClusterId
+    val clusterId: String
+        get() = connection.clusterId
 
     val clientId: String
         get() = connection.clientId
 
     private val moshi = Moshi.Builder().build()
     private val adapter = moshi.adapter(type).nullSafe()
-    private val keyListeners = Collections.synchronizedMap(HashMap<String, MutableSet<KafkaEventListener<T>>>())
+    private val keyListeners = Collections.synchronizedMap(HashMap<String, MutableSet<BrokerEventListener<T>>>())
 
     init {
-        log.debug("Initializing Kafka Client with topic '$topicName' for objects of type ${type.name}")
-        connection.on(topicName, ::onTopicRecord)
+        log.debug("Initializing Broker Client with topic '$topicName' for objects of type ${type.name}")
+        connection.on(topicName, ::onTopicMessage)
     }
 
     protected suspend fun send(
         key: String,
         obj: T?,
-        headers: KafkaRecordHeaders = KafkaRecordHeaders(clientId, currentClusterId),
+        headers: BaseBrokerMessageHeaders = this.connection.createHeaders(),
         blocking: Boolean = true,
     ): String {
         return connection.send(topicName, key, stringify(obj), headers, blocking)
@@ -53,18 +52,18 @@ open class KafkaClient<T : Any>(
         key: String,
         obj: T?,
         timeout: Duration = Duration.ZERO,
-        targetClusters: Set<Int> = emptySet(),
+        targetClusters: Set<String> = emptySet(),
         expectedResponses: Int? = null,
         blocking: Boolean = true,
-        messageCallback: KafkaMessageListener<T>? = null,
-    ): Pair<Map<Int, KafkaMessage<T>>, Boolean> {
+        messageCallback: BrokerMessageListener<T>? = null,
+    ): Pair<Map<String, BrokerMessage<T>>, Boolean> {
         val responseKey = key.toResponseKey()
 
-        val responses = mutableMapOf<Int, KafkaMessage<T>>()
+        val responses = mutableMapOf<String, BrokerMessage<T>>()
         val latch = SuspendingCountDownLatch(expectedResponses ?: targetClusters.size)
         val requestId: AtomicReference<String> = AtomicReference("")
 
-        val cb = KafkaEventListener { msg ->
+        val cb = BrokerEventListener { msg ->
             coroutineScope {
                 if (msg.headers.requestId != requestId.get()) {
                     return@coroutineScope
@@ -84,18 +83,9 @@ open class KafkaClient<T : Any>(
         on(responseKey, cb)
         var timeoutReached = false
         try {
-            requestId.set(
-                send(
-                    key,
-                    obj,
-                    KafkaRecordHeaders(
-                        clientId,
-                        currentClusterId,
-                        targetClusters,
-                    ),
-                    blocking,
-                )
-            )
+            val headers = this.connection.createHeaders(targetClusters)
+            requestId.set(headers.requestId)
+            send(key, obj, headers, blocking)
 
             if (timeout <= Duration.ZERO) {
                 latch.await()
@@ -109,14 +99,14 @@ open class KafkaClient<T : Any>(
         return Pair(responses, timeoutReached)
     }
 
-    protected fun on(key: String, cb: KafkaEventListener<T>) {
+    protected fun on(key: String, cb: BrokerEventListener<T>) {
         val listeners = keyListeners.computeIfAbsent(key) {
             CopyOnWriteArraySet()
         }
         listeners.add(cb)
     }
 
-    protected fun off(key: String, cb: KafkaEventListener<T>) {
+    protected fun off(key: String, cb: BrokerEventListener<T>) {
         keyListeners.computeIfPresent(key) { _, listeners ->
             listeners.remove(cb)
             if (listeners.size == 0) {
@@ -128,15 +118,13 @@ open class KafkaClient<T : Any>(
     }
 
     internal suspend fun respond(
-        msg: KafkaMessage<T>,
+        msg: BrokerMessage<T>,
         data: T?,
         blocking: Boolean = true,
     ) {
-        val newHeaders = KafkaRecordHeaders(
-            clientId = clientId,
-            sourceCluster = currentClusterId,
-            targetClusters = setOf(msg.headers.sourceCluster),
-            requestId = msg.headers.requestId,
+        val newHeaders = this.connection.createHeaders(
+            setOf(msg.headers.sourceCluster),
+            msg.headers.requestId,
         )
         send(
             msg.key.toResponseKey(),
@@ -154,16 +142,16 @@ open class KafkaClient<T : Any>(
         return adapter.toJson(obj)
     }
 
-    private suspend fun onTopicRecord(key: String, value: String, headers: KafkaRecordHeaders) = coroutineScope {
+    private suspend fun onTopicMessage(key: String, value: String, headers: BaseBrokerMessageHeaders) = coroutineScope {
         val obj = parse(value)
-        val msg = KafkaMessage(this@KafkaClient, key, obj, headers)
+        val msg = BrokerMessage(this@BrokerClient, key, obj, headers)
         val listeners = keyListeners[key]
         for (listener in listeners ?: return@coroutineScope) {
-            launch(Dispatchers.Default) {
+            launch {
                 try {
                     listener.onMessage(msg)
                 } catch (t: Throwable) {
-                    log.error("Uncaught error in KafkaClient listener", t)
+                    log.error("Uncaught error in BrokerClient listener", t)
                 }
             }
         }

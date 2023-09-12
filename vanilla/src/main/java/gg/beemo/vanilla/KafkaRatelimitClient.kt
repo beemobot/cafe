@@ -1,8 +1,8 @@
 package gg.beemo.vanilla
 
-import gg.beemo.latte.kafka.KafkaClient
-import gg.beemo.latte.kafka.KafkaConnection
-import gg.beemo.latte.kafka.KafkaMessage
+import gg.beemo.latte.broker.BrokerClient
+import gg.beemo.latte.broker.BrokerConnection
+import gg.beemo.latte.broker.BrokerMessage
 import gg.beemo.latte.logging.log
 import gg.beemo.latte.ratelimit.SharedRatelimitData
 import gg.beemo.latte.ratelimit.SharedRatelimitData.RatelimitClientData
@@ -14,7 +14,7 @@ import kotlin.time.Duration.Companion.seconds
 // Give request expiry a bit of leeway in case of clock drift
 private val EXPIRY_GRACE_PERIOD = 5.seconds.inWholeMilliseconds
 
-class RatelimitClient(conn: KafkaConnection) : KafkaClient<RatelimitClientData>(
+class RatelimitClient(conn: BrokerConnection) : BrokerClient<RatelimitClientData>(
     conn,
     RatelimitClientData::class.java,
     SharedRatelimitData.RATELIMIT_TOPIC,
@@ -34,7 +34,7 @@ class RatelimitClient(conn: KafkaConnection) : KafkaClient<RatelimitClientData>(
     }
 
     private suspend fun handleRatelimitRequest(
-        msg: KafkaMessage<RatelimitClientData>,
+        msg: BrokerMessage<RatelimitClientData>,
         ratelimitProvider: RatelimitProvider,
         type: String,
     ) {
