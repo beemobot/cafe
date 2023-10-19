@@ -1,7 +1,7 @@
 import {Logger} from "@beemobot/common";
 // ^ This needs to be updated; Probably @beemobot/cafe
 import {prisma, TAG} from "../index.js";
-async function init() {
+export async function initializePrisma() {
     try {
         if (process.env.DATABASE_URL == null) {
             Logger.error(TAG, 'Prisma is not configured, discarding request to start.')
@@ -16,5 +16,3 @@ async function init() {
         process.exit()
     }
 }
-
-export const Prismae = { init: init }

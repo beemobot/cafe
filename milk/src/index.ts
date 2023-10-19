@@ -1,11 +1,11 @@
 import {PrismaClient} from "@prisma/client";
 import dotenv from 'dotenv'
-import {Sentryboo} from "./connections/sentry.js";
-import {Koffaka} from "./connections/kafka.js";
-import {Prismae} from "./connections/prisma.js";
+import {initializeSentry} from "./connections/sentry.js";
+import {initializeKafka} from "./connections/kafka.js";
+import {initializePrisma} from "./connections/prisma.js";
 import {Logger} from "@beemobot/common";
 // ^ This needs to be updated; Probably @beemobot/cafe
-import {Fastified} from "./connections/fastify.js";
+import {initializeFastify} from "./connections/fastify.js";
 import * as Sentry from '@sentry/node'
 
 dotenv.config()
@@ -17,16 +17,16 @@ export const CONFIGURATION = {
     READS_ENABLED: process.env.READS_ENABLED?.toLowerCase() === 'true'
 }
 async function main() {
-    Sentryboo.init()
-    await Prismae.init()
+    initializeSentry()
+    await initializePrisma()
 
     Logger.info(TAG, 'Starting milk under the following conditions ' + JSON.stringify(CONFIGURATION))
     if (CONFIGURATION.WRITES_ENABLED) {
-        await Koffaka.init()
+        await initializeKafka()
     }
 
     if (CONFIGURATION.READS_ENABLED) {
-        await Fastified.init()
+        await initializeFastify()
     }
 }
 

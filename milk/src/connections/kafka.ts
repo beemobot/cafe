@@ -5,7 +5,7 @@ import {KafkaClients} from "../kafka/clients.js";
 
 export let kafka: KafkaConnection
 
-async function init() {
+export async function initializeKafka() {
     process.env.KAFKAJS_NO_PARTITIONER_WARNING = "1"
     if (!process.env.KAFKA_HOST) {
         Logger.error(TAG, 'Kafka is not configured, discarding request to start.')
@@ -19,5 +19,3 @@ async function init() {
 
     KafkaClients.init(kafka)
 }
-
-export const Koffaka = { init: init }

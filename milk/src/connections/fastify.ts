@@ -16,7 +16,7 @@ export const attachables: Attachable[] = [
     DefaultRoute
 ]
 
-async function init() {
+export async function initializeFastify() {
     if (!process.env.SERVER_PORT || Number.isNaN(process.env.SERVER_PORT)) {
         Logger.error(TAG, 'Server Port is not configured, discarding request to start.')
         process.exit()
@@ -41,5 +41,3 @@ async function init() {
         messages: link + '/messages/'
     }))
 }
-
-export const Fastified = { init: init }
