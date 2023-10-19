@@ -35,7 +35,6 @@ export async function initializeFastify() {
 
     Logger.info(TAG, 'Milk service is now serving. ' + JSON.stringify({
         port: port,
-        antispam: link + '/antispam/',
-        messages: link + '/messages/'
+        antispam: link + '/antispam/'
     }))
 }
