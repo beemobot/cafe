@@ -3,6 +3,7 @@ import {BrokerClient, KafkaConnection} from "@beemobot/common";
 import {prisma} from "../../index.js";
 import {StringUtil} from "../../utils/string.js";
 import {retriable} from "../../utils/retriable.js";
+import {RaidManagementData} from "../../types/raid.js";
 
 export const KEY_BATCH_INSERT_RAID_USERS = "batch-insert-raid-users"
 export class RaidManagementClient extends BrokerClient<RaidManagementData> {
@@ -78,24 +79,4 @@ export class RaidManagementClient extends BrokerClient<RaidManagementData> {
             await m.respond({ response: { externalId: raid!.external_id }, request: null })
         })
     }
-}
-export type RaidManagementData = {
-    request: RaidManagementRequest | null,
-    response: RaidManagementResponse | null
-}
-export type RaidManagementRequest = {
-    raidId: string,
-    guildIdString: string,
-    users: RaidManagementUser[],
-    concluded_at: (Date | string) | null
-}
-export type RaidManagementResponse = {
-    externalId: string
-}
-export type RaidManagementUser = {
-    idString: string,
-    name: string,
-    avatarHash: string | null,
-    createdAt: Date | string,
-    joinedAt: Date | string
 }
