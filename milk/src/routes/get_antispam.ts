@@ -12,7 +12,10 @@ export default async (fastify: FastifyInstance) => {
     fastify.get<{Params:{ id: string}}>('/antispam/:id', async (request, reply) => {
         try {
             const { id } = request.params
-            const cache = logsCache.get<string>(id)
+            const isJsonContentType = request.headers["content-type"] === "application/json"
+
+            const cacheKey = isJsonContentType ? id + ".json" : id
+            const cache = logsCache.get<string>(cacheKey)
 
             if (cache != null) {
                 return reply.send(cache)
@@ -26,27 +29,40 @@ export default async (fastify: FastifyInstance) => {
 
             const users = await prisma.raidUser.findMany({ where: { internal_raid_id: raid.internal_id } })
 
-            let response = 'Userbot raid detected against server ' + raid.guild_id + ' on ' + DateUtil.toDateString(users[0].joined_at);
-            if (users.length === 0) {
-                Logger.warn(TAG, "Raid " + id + "  reported no users.")
-                response += "\nThere are no users logged for this raid, at this moment. It is likely that the raid is still being processed, please come back later!"
-            } else {
-                response += '\nRaid size: ' + users.length + ' accounts'
-                response += '\n'
-                response += '\n   Joined at:              ID:             Username:'
-                response += '\n'
-                let userIds = '';
-                for (const user of users) {
-                    response += DateUtil.toTimeString(user.joined_at) + '   ' + user.user_id + '  ' + user.name
-                    userIds += user.user_id
-                }
+            if (!isJsonContentType) {
+                let response = 'Userbot raid detected against server ' + raid.guild_id + ' on ' + DateUtil.toDateString(users[0].joined_at);
+                if (users.length === 0) {
+                    Logger.warn(TAG, "Raid " + id + "  reported no users.")
+                    response += "\nThere are no users logged for this raid, at this moment. It is likely that the raid is still being processed, please come back later!"
+                } else {
+                    response += '\nRaid size: ' + users.length + ' accounts'
+                    response += '\n'
+                    response += '\n   Joined at:              ID:             Username:'
+                    response += '\n'
+                    let userIds = '';
+                    for (const user of users) {
+                        response += DateUtil.toTimeString(user.joined_at) + '   ' + user.user_id + '  ' + user.name
+                        userIds += user.user_id
+                    }
 
-                response += '\n'
-                response += '\n     Raw IDs:'
-                response += '\n'
-                response += userIds
-                logsCache.set(id, response)
+                    response += '\n'
+                    response += '\n     Raw IDs:'
+                    response += '\n'
+                    response += userIds
+                    logsCache.set(cacheKey, response)
+                }
+                return reply.send(response)
             }
+
+            let response = JSON.stringify({
+                size: users.length,
+                started_at: users[0]?.joined_at,
+                concluded_at: raid.concluded_at,
+                guild: raid.guild_id,
+                accounts: users
+            })
+
+            logsCache.set(cacheKey, response)
             return reply.send(response)
         } catch (ex) {
             console.error(ex)
