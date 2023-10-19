@@ -1,7 +1,7 @@
 import {BrokerClient, KafkaConnection, Logger} from "@beemobot/common";
 // ^ This needs to be updated; Probably @beemobot/cafe
 import {prisma, TAG} from "../../index.js";
-import {StringUtil} from "../../utils/string.js";
+import {randomString} from "../../utils/string.js";
 import {retriable} from "../../utils/retriable.js";
 import {RaidManagementData} from "../../types/raid.js";
 
@@ -46,7 +46,7 @@ export class RaidManagementClient extends BrokerClient<RaidManagementData> {
                     async () => prisma.raid.create({
                         data: {
                             internal_id: request.raidId,
-                            external_id: StringUtil.random(12),
+                            external_id: randomString(12),
                             guild_id: BigInt(request.guildIdString),
                             concluded_at: request.concluded_at
                         }
