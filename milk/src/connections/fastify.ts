@@ -6,15 +6,12 @@ import GetAntispam from "../routes/get_antispam.js";
 import LogHook from "../hooks/log_hook.js";
 import ErrorHook from "../hooks/error_hook.js";
 import DefaultRoute from "../routes/default_route.js";
-import {Attachable} from "../types/fastify.js";
 
-const server = Fastify.default({ ignoreTrailingSlash: true, ignoreDuplicateSlashes: true })
-const attachables: Attachable[] = [
-    ErrorHook,
-    LogHook,
-    GetAntispam,
-    DefaultRoute
-]
+const server = Fastify.default({
+    ignoreTrailingSlash: true,
+    ignoreDuplicateSlashes: true,
+    trustProxy: (process.env.TRUST_PROXY ?? 'false').toLowerCase() === 'true'
+})
 
 export async function initializeFastify() {
     if (!process.env.SERVER_PORT || Number.isNaN(process.env.SERVER_PORT)) {
@@ -23,7 +20,7 @@ export async function initializeFastify() {
     }
 
     server.register(fastify =>  {
-        for (const attachable of attachables) {
+        for (const attachable of [ErrorHook, LogHook, GetAntispam, DefaultRoute]) {
             attachable(fastify)
         }
     })
