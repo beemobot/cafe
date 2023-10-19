@@ -4,14 +4,13 @@ import {prisma, TAG} from "../index.js";
 export async function initializePrisma() {
     try {
         if (process.env.DATABASE_URL == null) {
-            Logger.error(TAG, 'Prisma is not configured, discarding request to start.')
-            process.exit()
+            Logger.error(TAG, 'No database URI has been found on the configuration. Please configure it as the service cannot run without it.')
             return
         }
 
         await prisma.$connect()
     } catch (ex) {
-        Logger.error(TAG, 'Failed to connect to Prisma, closing startup.')
+        Logger.error(TAG, 'Failed to connect to the database, closing service.')
         console.error(ex)
         process.exit()
     }

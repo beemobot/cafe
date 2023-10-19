@@ -8,12 +8,14 @@ export let kafka: KafkaConnection
 export async function initializeKafka() {
     process.env.KAFKAJS_NO_PARTITIONER_WARNING = "1"
     if (!process.env.KAFKA_HOST) {
-        Logger.error(TAG, 'Kafka is not configured, discarding request to start.')
-        process.exit()
+        Logger.error(TAG,
+            'Kafka is needed to start this service. If you need to run this for read-only, ' +
+            'please properly configure that on the configuration.'
+        )
         return
     }
 
-    Logger.info(TAG, "Attempting to start Kafka " + JSON.stringify({ host: process.env.KAFKA_HOST }))
+    Logger.info(TAG, "Attempting to connect to Kafka " + JSON.stringify({ host: process.env.KAFKA_HOST }))
     kafka = new KafkaConnection(process.env.KAFKA_HOST, "milk", "milk", "-5")
     await kafka.start()
 

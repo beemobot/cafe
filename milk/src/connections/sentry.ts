@@ -4,7 +4,7 @@ import {Logger} from "@beemobot/common";
 import {TAG} from "../index.js";
 export  function initializeSentry() {
     if (process.env.SENTRY_DSN == null) {
-        Logger.error(TAG, 'Sentry is not configured, we recommend configuring Sentry to catch issues properly.')
+        Logger.warn(TAG, 'Sentry is not configured, we recommend configuring Sentry to catch issues properly.')
         return
     }
 
