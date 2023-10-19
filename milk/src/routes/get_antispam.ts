@@ -1,7 +1,7 @@
 import {prisma, TAG} from "../index.js";
 import {Logger} from "@beemobot/common";
 // ^ This needs to be updated; Probably @beemobot/cafe
-import {DateUtil} from "../utils/date.js";
+import {toDateString, toTimeString} from "../utils/date.js";
 import {FastifyInstance} from "fastify";
 import NodeCache from "node-cache";
 
@@ -30,7 +30,12 @@ export default async (fastify: FastifyInstance) => {
             const users = await prisma.raidUser.findMany({ where: { internal_raid_id: raid.internal_id } })
 
             if (!isJsonContentType) {
-                let response = 'Userbot raid detected against server ' + raid.guild_id + ' on ' + DateUtil.toDateString(users[0].joined_at);
+                let startedDate = "N/A"
+                if (users.length > 0) {
+                    startedDate = toDateString(users[0].joined_at)
+                }
+
+                let response = 'Userbot raid detected against server ' + raid.guild_id + ' on ' + startedDate;
                 if (users.length === 0) {
                     Logger.warn(TAG, "Raid " + id + "  reported no users.")
                     response += "\nThere are no users logged for this raid, at this moment. It is likely that the raid is still being processed, please come back later!"
@@ -41,7 +46,7 @@ export default async (fastify: FastifyInstance) => {
                     response += '\n'
                     let userIds = '';
                     for (const user of users) {
-                        response += DateUtil.toTimeString(user.joined_at) + '   ' + user.user_id + '  ' + user.name
+                        response += toTimeString(user.joined_at) + '   ' + user.user_id + '  ' + user.name
                         userIds += user.user_id
                     }
 
