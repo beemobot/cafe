@@ -2,15 +2,17 @@ import {prisma, TAG} from "../index.js";
 import {Logger} from "@beemobot/common";
 // ^ This needs to be updated; Probably @beemobot/cafe
 import {DateUtil} from "../utils/date.js";
-import {AntispamLogsCache} from "../cache/antispamLogsCache.js";
 import {FastifyInstance} from "fastify";
+import NodeCache from "node-cache";
+
+const logsCache = new NodeCache({ stdTTL: 10 * 1000 * 60 })
 
 export default async (fastify: FastifyInstance) => {
     fastify.get('/antispam', (_, reply) => reply.send('You came to the wrong spot, buddy!'))
     fastify.get<{Params:{ id: string}}>('/antispam/:id', async (request, reply) => {
         try {
             const { id } = request.params
-            const cache = AntispamLogsCache.get<string>(id)
+            const cache = logsCache.get<string>(id)
 
             if (cache != null) {
                 return reply.send(cache)
@@ -43,7 +45,7 @@ export default async (fastify: FastifyInstance) => {
                 response += '\n     Raw IDs:'
                 response += '\n'
                 response += userIds
-                AntispamLogsCache.set(id, response)
+                logsCache.set(id, response)
             }
             return reply.send(response)
         } catch (ex) {
