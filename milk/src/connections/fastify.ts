@@ -1,16 +1,16 @@
 import {Logger} from "@beemobot/common";
 // ^ This needs to be updated; Probably @beemobot/cafe
 import {TAG} from "../index.js";
-import Fastify, {FastifyInstance} from "fastify";
-import {GetAntispam} from "../routes/GetAntispam.js";
-import {LogHook} from "../hooks/LogHook.js";
-import {ErrorAndNotFoundHook} from "../hooks/ErrorAndNotFoundHook.js";
-import {DefaultRoute} from "../routes/DefaultRoute.js";
+import Fastify from "fastify";
+import GetAntispam from "../routes/get_antispam.js";
+import LogHook from "../hooks/log_hook.js";
+import ErrorHook from "../hooks/error_hook.js";
+import DefaultRoute from "../routes/default_route.js";
 import {Attachable} from "../types/fastify.js";
 
-export const server: FastifyInstance = Fastify.default({ ignoreTrailingSlash: true, ignoreDuplicateSlashes: true })
-export const attachables: Attachable[] = [
-    ErrorAndNotFoundHook,
+const server = Fastify.default({ ignoreTrailingSlash: true, ignoreDuplicateSlashes: true })
+const attachables: Attachable[] = [
+    ErrorHook,
     LogHook,
     GetAntispam,
     DefaultRoute
@@ -18,14 +18,15 @@ export const attachables: Attachable[] = [
 
 export async function initializeFastify() {
     if (!process.env.SERVER_PORT || Number.isNaN(process.env.SERVER_PORT)) {
-        Logger.error(TAG, 'Server Port is not configured, discarding request to start.')
-        process.exit()
+        Logger.error(TAG, 'You need to configure a server port for the service to work.')
         return
     }
 
-    for (const attachable of attachables) {
-        await attachable.attach(server)
-    }
+    server.register(fastify =>  {
+        for (const attachable of attachables) {
+            attachable(fastify)
+        }
+    })
 
     const port = Number.parseInt(process.env.SERVER_PORT)
     const link = 'http://localhost:' + port
@@ -35,7 +36,7 @@ export async function initializeFastify() {
         host: '0.0.0.0'
     })
 
-    Logger.info(TAG, 'Fastify Server is now running ' + JSON.stringify({
+    Logger.info(TAG, 'Milk service is now serving. ' + JSON.stringify({
         port: port,
         antispam: link + '/antispam/',
         messages: link + '/messages/'

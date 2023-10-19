@@ -1,5 +1,3 @@
 import {FastifyInstance} from "fastify";
 
-export type Attachable = {
-    attach: (server: FastifyInstance) => any
-}
+export type Attachable = (fastify: FastifyInstance) => void

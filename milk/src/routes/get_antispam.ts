@@ -5,9 +5,9 @@ import {DateUtil} from "../utils/date.js";
 import {AntispamLogsCache} from "../cache/antispamLogsCache.js";
 import {FastifyInstance} from "fastify";
 
-const attach = (server: FastifyInstance) => {
-    server.get('/antispam', (request, reply) => reply.send('You came to the wrong spot, buddy!'))
-    server.get<{Params:{ id: string}}>('/antispam/:id', async (request, reply) => {
+export default async (fastify: FastifyInstance) => {
+    fastify.get('/antispam', (_, reply) => reply.send('You came to the wrong spot, buddy!'))
+    fastify.get<{Params:{ id: string}}>('/antispam/:id', async (request, reply) => {
         try {
             const { id } = request.params
             const cache = AntispamLogsCache.get<string>(id)
@@ -51,5 +51,3 @@ const attach = (server: FastifyInstance) => {
         }
     })
 }
-
-export const GetAntispam = { attach: attach }
