@@ -10,7 +10,8 @@ import DefaultRoute from "../routes/default_route.js";
 const server = Fastify.default({
     ignoreTrailingSlash: true,
     ignoreDuplicateSlashes: true,
-    trustProxy: (process.env.TRUST_PROXY ?? 'false').toLowerCase() === 'true'
+    trustProxy: (process.env.TRUST_PROXY ?? 'false').toLowerCase() === 'true',
+    disableRequestLogging: true
 })
 
 export async function initializeFastify() {
