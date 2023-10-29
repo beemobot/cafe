@@ -10,10 +10,15 @@ const logsCache = new NodeCache({ stdTTL: 10 * 1000 * 60 })
 export default async (fastify: FastifyInstance) => {
     fastify.get('/antispam', (_, reply) => reply.send('You came to the wrong spot, buddy!'))
     fastify.get<{Params:{ id: string}}>('/antispam/:id', async (request, reply) => {
-        const { id } = request.params
-        const isJsonContentType = request.headers["content-type"] === "application/json"
+        let { id } = request.params
+        const isJsonContentType = id.endsWith(".json") || request.headers.accept === "application/json"
 
         const cacheKey = isJsonContentType ? id + ".json" : id
+
+        if (id.includes(".")) {
+            id = id.split(".")[0]
+        }
+
         const cache = logsCache.get<string>(cacheKey)
 
         if (cache != null) {
