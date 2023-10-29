@@ -14,15 +14,13 @@ export default async (fastify: FastifyInstance) => {
         const isJsonContentType = id.endsWith(".json") || request.headers.accept === "application/json"
 
         const cacheKey = isJsonContentType ? id + ".json" : id
+        const cache = logsCache.get<string>(cacheKey)
+        if (cache != null) {
+            return reply.send(cache)
+        }
 
         if (id.includes(".")) {
             id = id.split(".")[0]
-        }
-
-        const cache = logsCache.get<string>(cacheKey)
-
-        if (cache != null) {
-            return reply.send(cache)
         }
 
         const raid = await prisma.raid.findUnique({ where: { external_id: id } })
@@ -34,7 +32,7 @@ export default async (fastify: FastifyInstance) => {
         const users = await prisma.raidUser.findMany({ where: { internal_raid_id: raid.internal_id } })
 
         let response: string
-        let shouldCache: boolean = true
+        let shouldCache: boolean = users.length !== 0
 
         if (isJsonContentType) {
             response = JSON.stringify({
@@ -53,8 +51,6 @@ export default async (fastify: FastifyInstance) => {
             response = 'Userbot raid detected against server ' + raid.guild_id + ' on ' + startedDate;
 
             if (users.length === 0) {
-                shouldCache = false
-
                 Logger.warn(TAG, `Raid ${id} reported no users.`)
                 response += "\nThere are no users logged for this raid, at this moment. It is likely that the raid is still being processed, please come back later!"
             } else {
