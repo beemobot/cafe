@@ -7,9 +7,15 @@ import NodeCache from "node-cache";
 
 const logsCache = new NodeCache({ stdTTL: 10 * 1000 * 60 })
 
+type IdParameter = {Params:{ id: string } }
 export default async (fastify: FastifyInstance) => {
-    fastify.get('/antispam', (_, reply) => reply.send('You came to the wrong spot, buddy!'))
-    fastify.get<{Params:{ id: string}}>('/antispam/:id', async (request, reply) => {
+    fastify.get<IdParameter>('/antispam/:id', (request, reply) => {
+        let { id } = request.params
+        reply.redirect('/raid/' + encodeURIComponent(id))
+    })
+
+    fastify.get('/raid', (_, reply) => reply.send('You came to the wrong spot, buddy!'))
+    fastify.get<IdParameter>('/raid/:id', async (request, reply) => {
         let { id } = request.params
         const isJsonContentType = id.endsWith(".json") || request.headers.accept === "application/json"
 
