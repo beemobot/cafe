@@ -48,20 +48,20 @@ export class RaidManagementClient extends BrokerClient<RaidManagementData> {
                             internal_id: request.raidId,
                             external_id: randomString(12),
                             guild_id: BigInt(request.guildIdString),
-                            concluded_at: request.concluded_at
+                            concluded_at: request.concludedAt
                         }
                     }),
                     1,
                     25
                 )
             } else {
-                if (request.concluded_at != null && (raid.concluded_at == null || raid.concluded_at !== new Date(request.concluded_at))) {
+                if (request.concludedAt != null && (raid.concluded_at == null || raid.concluded_at !== new Date(request.concludedAt))) {
                     Logger.info(TAG, `Concluding raid ${request.raidId} from guild ${request.guildIdString}.`)
                     raid = await retriable(
                         'conclude_raid',
                         async () => prisma.raid.update({
                             where: { external_id: raid!.external_id, internal_id: request.raidId },
-                            data: { concluded_at: request.concluded_at }
+                            data: { concluded_at: request.concludedAt }
                         }),
                         0.2,
                         25
