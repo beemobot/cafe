@@ -4,6 +4,7 @@ import {Logger} from "@beemobot/common";
 import {toDateString, toTimeString} from "../utils/date.js";
 import {FastifyInstance} from "fastify";
 import NodeCache from "node-cache";
+import {PublicRaidUser} from "../types/raid.js";
 
 const logsCache = new NodeCache({ stdTTL: 10 * 1000 * 60 })
 
@@ -35,7 +36,16 @@ export default async (fastify: FastifyInstance) => {
             return reply.code(404).send('404 Not Found')
         }
 
-        const users = await prisma.raidUser.findMany({ where: { internal_raid_id: raid.internal_id } })
+        const users = (await prisma.raidUser.findMany({ where: { internal_raid_id: raid.internal_id } }))
+            .map(user => {
+                return {
+                    id: user.user_id,
+                    name: user.name,
+                    joinedAt: user.joined_at,
+                    createdAt: user.created_at,
+                    avatarHash: user.avatar_hash
+                } satisfies PublicRaidUser
+            })
 
         let response: string
         let shouldCache: boolean = users.length !== 0
@@ -43,7 +53,7 @@ export default async (fastify: FastifyInstance) => {
         if (isJsonContentType) {
             response = JSON.stringify({
                 size: users.length,
-                started_at: users[0]?.joined_at,
+                started_at: users[0]?.joinedAt,
                 concluded_at: raid.concluded_at,
                 guild: raid.guild_id,
                 accounts: users
@@ -51,7 +61,7 @@ export default async (fastify: FastifyInstance) => {
         } else {
             let startedDate = "N/A"
             if (users.length > 0) {
-                startedDate = toDateString(users[0].joined_at)
+                startedDate = toDateString(users[0].joinedAt)
             }
 
             response = 'Userbot raid detected against server ' + raid.guild_id + ' on ' + startedDate;
@@ -66,11 +76,11 @@ export default async (fastify: FastifyInstance) => {
                 response += '\n'
                 let userIds = '';
                 for (const user of users) {
-                    response += toTimeString(user.joined_at) + '   ' + user.user_id + '  ' + user.name
+                    response += toTimeString(user.joinedAt) + '   ' + user.id + '  ' + user.name
                     if (userIds !== '') {
                         userIds += '\n'
                     }
-                    userIds += user.user_id
+                    userIds += user.id
                 }
 
                 response += '\n'

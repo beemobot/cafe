@@ -2,7 +2,7 @@ import {Logger} from "@beemobot/common";
 // ^ This needs to be updated; Probably @beemobot/cafe
 import {TAG} from "../index.js";
 import Fastify from "fastify";
-import GetAntispam from "../routes/get_antispam.js";
+import GetAntispam from "../routes/get_raid.js";
 import LogHook from "../hooks/log_hook.js";
 import ErrorHook from "../hooks/error_hook.js";
 import DefaultRoute from "../routes/default_route.js";

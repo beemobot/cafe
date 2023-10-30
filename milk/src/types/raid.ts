@@ -21,3 +21,11 @@ export type RaidManagementUser = {
     createdAt: Date | string,
     joinedAt: Date | string
 }
+
+export type PublicRaidUser = {
+    id: bigint,
+    name: string,
+    avatarHash: string | null,
+    createdAt: Date,
+    joinedAt: Date
+}
