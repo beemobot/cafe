@@ -53,10 +53,10 @@ export default async (fastify: FastifyInstance) => {
         if (isJsonContentType) {
             response = JSON.stringify({
                 size: users.length,
-                started_at: users[0]?.joinedAt,
-                concluded_at: raid.concluded_at,
+                startedAt: users[0]?.joinedAt,
+                concludedAt: raid.concluded_at,
                 guild: raid.guild_id,
-                accounts: users
+                users
             })
         } else {
             let startedDate = "N/A"
