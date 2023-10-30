@@ -1,0 +1,88 @@
+openapi: 3.0.3
+info:
+  title: Milk by Beemo
+  description: |-
+    The official raid log manager of Beemo. It is used to store raid logs to the database, and also to allow people to view raid logs through a text or JSON format.
+    
+    In this documentation, we will be primarily describing the JSON output of the service as this is primarily why other developers would visit this.
+  termsOfService: https://beemo.gg/terms
+  contact:
+    email: hello@beemo.gg
+  version: 1.0.0
+servers:
+  - url: https://logs.beemo.gg
+tags:
+  - name: raid
+    description: Everything public about raids caught by Beemo.
+paths:
+  /raid/{id}.json:
+    get:
+      tags:
+        - raid
+      summary: Gets information about a raid in JSON format.
+      description: Returns more detailed information about a raid in JSON format.
+      operationId: getRaidById
+      parameters:
+        - name: id
+          in: path
+          description: ID of the raid.
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Raid found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Raid'
+        '404':
+          description: Raid not found
+components:
+  schemas:
+    Raid:
+      type: object
+      properties:
+        size:
+          type: integer
+          format: int32
+          example: 32
+        startedAt:
+          type: string
+          format: date
+          example: '2023-10-30T15:29:57.697Z'
+          nullable: true
+        concludedAt:
+          type: string
+          format: date
+          example: '2023-10-30T16:10:57.697Z'
+          nullable: true
+        guild:
+          type: string
+          format: int64
+          example: '697474023914733575'
+        users:
+          type: array
+          items:
+            $ref: '#/components/schemas/RaidUser'
+    RaidUser:
+      type: object
+      properties:
+        id:
+          type: string
+          format: int64
+          example: '584322030934032393'
+        name:
+          type: string
+          example: 'Shindou Mihou'
+        avatarHash:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: datetime
+          example: '2023-10-30T16:10:57.697Z'
+        joinedAt:
+          type: string
+          format: datetime
+          example: '2023-10-30T16:10:57.697Z'
