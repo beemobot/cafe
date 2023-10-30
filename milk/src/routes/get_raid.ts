@@ -39,7 +39,7 @@ export default async (fastify: FastifyInstance) => {
         const users = (await prisma.raidUser.findMany({ where: { internal_raid_id: raid.internal_id } }))
             .map(user => {
                 return {
-                    id: user.user_id,
+                    id: user.user_id.toString(),
                     name: user.name,
                     joinedAt: user.joined_at,
                     createdAt: user.created_at,
@@ -55,7 +55,7 @@ export default async (fastify: FastifyInstance) => {
                 size: users.length,
                 startedAt: users[0]?.joinedAt,
                 concludedAt: raid.concluded_at,
-                guild: raid.guild_id,
+                guild: raid.guild_id.toString(),
                 users
             })
         } else {

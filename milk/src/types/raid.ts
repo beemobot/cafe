@@ -23,7 +23,7 @@ export type RaidManagementUser = {
 }
 
 export type PublicRaidUser = {
-    id: bigint,
+    id: string,
     name: string,
     avatarHash: string | null,
     createdAt: Date,
