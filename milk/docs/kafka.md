@@ -7,8 +7,8 @@ accessible to third-parties, therefore, more than likely, this is of no-use for 
 - [`Client Specifications`](#client-specifications) talks about the different parts of the client.
   - [`overview`](#overview) summarizes some key points  of the client.
   - [`keys`](#keys)
-    - [`batch-insert-raid-users`](#batch-insert-raid-users) used to insert one or more bots detected;
-      creating a raid, and concluding based on the information provided.
+    - [`batch-insert-raid-users`](#batch-insert-raid-users) used to insert one or more bots detected; creates the Raid if it doesn't exist.
+    - [`conclude-raid`](#conclude-raid) used to conclude an existing raid; if no date provided, uses current time.
   - [`schemas`](#schemas)
     - [`RaidManagementData`](#raid-management-data) is the primary type transported between clients.
     - [`RaidManagementRequest`](#raid-management-request) is used by a requesting client to add more raid users, 
@@ -33,6 +33,10 @@ provide some understanding over how the Kafka client of Milk processes requests.
 
 ### Batch Insert Raid Users
 
+```yaml
+key: batch-insert-raid-users
+```
+
 This is a specific key, or endpoint, in the Kafka client where clients can insert 
 bots detected, start a raid or conclude a raid. It is expected that this creates a new raid 
 when the `raidId` provided does not exist already. In addition, if the raid hasn't been concluded 
@@ -43,6 +47,24 @@ This endpoint expects to receive a [`RaidManagementData`](#raid-management-data)
 following the [`RaidManagementRequest`](#raid-management-request) schema.
 
 After processing the request, this endpoint should respond with a similar [`RaidManagementData`](#raid-management-data) but 
+with the `response` property following the [`RaidManagementResponse`](#raid-management-response) schema.
+
+### Conclude Raid
+
+```yaml
+key: conclude-raid
+```
+
+This is a specific key, or endpoint, in the Kafka client where clients can declare an existing raid as concluded. 
+It is not needed for the `concludedAt` property to be provided as it will use the current time if not provided.
+Although you cannot modify the `concludedAt` of an existing raid, if a raid is already concluded then it will skip.
+
+This endpoint expects to receive a [`RaidManagementData`](#raid-management-data) with the `request` property
+following the [`RaidManagementRequest`](#raid-management-request) schema. Unlike [`batch-insert-raid-users`](#batch-insert-raid-users),  
+this doesn't expect the `users` property to not be empty, even `concludedAt` can be of a zero value or even 
+null as long as the `raidId` and `guildIdString` are not null.
+
+After processing the request, this endpoint should respond with a similar [`RaidManagementData`](#raid-management-data) but
 with the `response` property following the [`RaidManagementResponse`](#raid-management-response) schema.
 
 ## Schemas
