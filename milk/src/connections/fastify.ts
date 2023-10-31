@@ -29,17 +29,12 @@ export async function initializeFastify() {
         })
 
         const port = Number.parseInt(process.env.SERVER_PORT)
-        const link = 'http://localhost:' + port
-
         await server.listen({
             port: port,
             host: '0.0.0.0'
         })
 
-        Logger.info(TAG, 'Milk service is now serving. ' + JSON.stringify({
-            port: port,
-            antispam: link + '/antispam/'
-        }))
+        Logger.info(TAG, `Milk is now serving logs under port ${port}.`)
     } catch (ex) {
         logError('An issue occurred while trying to start Fastify.', ex)
     }

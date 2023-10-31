@@ -15,16 +15,14 @@ export default async (fastify: FastifyInstance) => {
         let { id } = request.params
         reply.redirect('/raid/' + encodeURIComponent(id))
     })
-
-    fastify.get('/raid', (_, reply) => reply.send('You came to the wrong spot, buddy!'))
     fastify.get<IdParameter>('/raid/:id', async (request, reply) => {
         let { id } = request.params
         const isJsonContentType = id.endsWith(".json") || request.headers.accept === "application/json"
 
         const cacheKey = isJsonContentType ? id + ".json" : id
-        const cache = logsCache.get<string>(cacheKey)
-        if (cache != null) {
-            return reply.send(cache)
+        const cachedResult = logsCache.get<string>(cacheKey)
+        if (cachedResult != null) {
+            return reply.send(cachedResult)
         }
 
         if (id.includes(".")) {
