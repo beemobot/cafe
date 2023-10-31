@@ -13,7 +13,7 @@ export async function run<T>(
     try {
         return await action();
     } catch (exception) {
-        // Capture exception once to Sentry, we don't want to possibly send so many exceptions
+        // Raise exception once to Sentry, we don't want to possibly send so many exceptions
         if (retries === 1) {
             Sentry.captureException(exception)
         }

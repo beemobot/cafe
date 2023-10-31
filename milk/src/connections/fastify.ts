@@ -6,6 +6,7 @@ import GetAntispam from "../routes/get_raid.js";
 import LogHook from "../hooks/log_hook.js";
 import ErrorHook from "../hooks/error_hook.js";
 import DefaultRoute from "../routes/default_route.js";
+import {logError, logIssue} from "./sentry.js";
 
 const server = Fastify.default({
     ignoreTrailingSlash: true,
@@ -15,27 +16,31 @@ const server = Fastify.default({
 })
 
 export async function initializeFastify() {
-    if (!process.env.SERVER_PORT || Number.isNaN(process.env.SERVER_PORT)) {
-        Logger.error(TAG, 'You need to configure a server port for the service to work.')
-        return
-    }
-
-    server.register(fastify =>  {
-        for (const attachable of [ErrorHook, LogHook, GetAntispam, DefaultRoute]) {
-            attachable(fastify)
+    try {
+        if (!process.env.SERVER_PORT || Number.isNaN(process.env.SERVER_PORT)) {
+            logIssue('You need to configure a server port for the service to work.')
+            return
         }
-    })
 
-    const port = Number.parseInt(process.env.SERVER_PORT)
-    const link = 'http://localhost:' + port
+        server.register(fastify =>  {
+            for (const attachable of [ErrorHook, LogHook, GetAntispam, DefaultRoute]) {
+                attachable(fastify)
+            }
+        })
 
-    await server.listen({
-        port: port,
-        host: '0.0.0.0'
-    })
+        const port = Number.parseInt(process.env.SERVER_PORT)
+        const link = 'http://localhost:' + port
 
-    Logger.info(TAG, 'Milk service is now serving. ' + JSON.stringify({
-        port: port,
-        antispam: link + '/antispam/'
-    }))
+        await server.listen({
+            port: port,
+            host: '0.0.0.0'
+        })
+
+        Logger.info(TAG, 'Milk service is now serving. ' + JSON.stringify({
+            port: port,
+            antispam: link + '/antispam/'
+        }))
+    } catch (ex) {
+        logError('An issue occurred while trying to start Fastify.', ex)
+    }
 }

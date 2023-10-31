@@ -5,6 +5,7 @@ import {randomString} from "../../utils/string.js";
 import {run} from "../../utils/retry.js";
 import * as Sentry from '@sentry/node';
 import {RaidManagementData} from "../../types/raid.js";
+import {logIssue} from "../../connections/sentry.js";
 
 export const RAID_MANAGEMENT_CLIENT_TOPIC = "raid-management"
 export const RAID_MANAGEMENT_BATCH_INSERT_KEY = "batch-insert-raid-users"
@@ -32,10 +33,7 @@ export class RaidManagementClient extends BrokerClient<RaidManagementData> {
 
         let raid = await prisma.raid.findUnique({where: {internal_id: raidId}})
         if (raid == null) {
-            const error = Error(`Received a request to conclude a raid, but the raid is not in the database. [raid=${raidId}]`)
-
-            Logger.error(TAG, error.message)
-            Sentry.captureException(error)
+            logIssue(`Received a request to conclude a raid, but the raid is not in the database. [raid=${raidId}]`)
             return
         }
 

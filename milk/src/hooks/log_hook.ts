@@ -6,6 +6,7 @@ import {FastifyInstance} from "fastify";
 export default async (fastify: FastifyInstance) => {
     fastify.addHook(
         'preHandler',
-        async (request) => Logger.info(TAG, 'Request ' + JSON.stringify({ method: request.method, url: request.url, ip: request.ip }))
+        async (request) =>
+            Logger.info(TAG, 'Request ' + JSON.stringify({ method: request.method, url: request.url, ip: request.ip }))
     )
 }
