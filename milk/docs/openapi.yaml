@@ -36,6 +36,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Raid'
+          headers:
+            'X-Cache':
+              description: 'Indicates whether the response was cached or not.'
+              schema:
+                type: string
+                example:
+                  - 'HIT'
+                  - 'MISS'
+            'X-Cache-Expires':
+              description: 'Indicates the timestamp when the cache will expire.'
+              schema:
+                type: integer
+                example: '1698767766556'
         '404':
           description: Raid not found
 components:
