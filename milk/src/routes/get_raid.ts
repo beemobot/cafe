@@ -18,9 +18,11 @@ export default async (fastify: FastifyInstance) => {
     })
     fastify.get<IdParameter>('/raid/:id', async (request, reply) => {
         let { id } = request.params
-        const isJsonContentType = id.endsWith(".json") || request.headers.accept === "application/json"
 
-        const cacheKey = isJsonContentType ? id + ".json" : id
+        const acceptsJson = request.headers.accept === "application/json"
+        const isJsonContentType = id.endsWith(".json") || acceptsJson
+
+        const cacheKey = acceptsJson ? id + ".json" : id
         const cachedResult = logsCache.get<string>(cacheKey)
         if (cachedResult != null) {
             return reply.send(cachedResult)
