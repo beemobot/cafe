@@ -1,15 +1,16 @@
 import {BrokerClient, BrokerMessage, KafkaConnection, Logger} from "@beemobot/common";
 // ^ This needs to be updated; Probably @beemobot/cafe
-import {prisma, TAG} from "../../index.js";
 import {randomString} from "../../utils/string.js";
 import {run} from "../../utils/retry.js";
-import * as Sentry from '@sentry/node';
 import {RaidManagementData} from "../../types/raid.js";
 import {logIssue} from "../../connections/sentry.js";
-
-export const RAID_MANAGEMENT_CLIENT_TOPIC = "raid-management"
-export const RAID_MANAGEMENT_BATCH_INSERT_KEY = "batch-insert-raid-users"
-export const RAID_MANAGEMENT_CONCLUDE_RAID = "conclude-raid"
+import {prisma} from "../../connections/prisma.js";
+import {TAG} from "../../constants/logging.js";
+import {
+    RAID_MANAGEMENT_BATCH_INSERT_KEY,
+    RAID_MANAGEMENT_CLIENT_TOPIC,
+    RAID_MANAGEMENT_CONCLUDE_RAID
+} from "../../constants/raid_management_kafka.js";
 
 export class RaidManagementClient extends BrokerClient<RaidManagementData> {
     constructor(conn: KafkaConnection) {

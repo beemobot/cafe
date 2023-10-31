@@ -1,15 +1,16 @@
-import {prisma, TAG} from "../index.js";
 import {Logger} from "@beemobot/common";
 // ^ This needs to be updated; Probably @beemobot/cafe
 import {toDateString, toTimeString} from "../utils/date.js";
 import {FastifyInstance} from "fastify";
 import NodeCache from "node-cache";
 import {PublicRaidUser} from "../types/raid.js";
+import {prisma} from "../connections/prisma.js";
+import {TAG} from "../constants/logging.js";
+import {TEN_MINUTES} from "../constants/time.js";
 
-const TEN_MINUTES = 60 * 10
 const logsCache = new NodeCache({ stdTTL: TEN_MINUTES })
 
-type IdParameter = {Params:{ id: string } }
+type IdParameter = { Params: { id: string } }
 export default async (fastify: FastifyInstance) => {
     fastify.get<IdParameter>('/antispam/:id', (request, reply) => {
         let { id } = request.params

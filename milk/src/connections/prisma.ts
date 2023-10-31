@@ -1,6 +1,8 @@
 // ^ This needs to be updated; Probably @beemobot/cafe
-import {prisma} from "../index.js";
 import {logError, logIssue} from "./sentry.js";
+import {PrismaClient} from "@prisma/client";
+
+export let prisma = new PrismaClient()
 
 export async function initializePrisma() {
     try {

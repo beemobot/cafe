@@ -4,7 +4,7 @@ import * as Sentry from "@sentry/node";
 export default async (fastify: FastifyInstance) => {
     fastify
         .setNotFoundHandler((_, reply) => {  reply.code(404).send('404 Not Found') })
-        .setErrorHandler((error, request, reply) => {
+        .setErrorHandler((error, _, reply) => {
             if (reply.statusCode === 429) {
                 reply.send('You are sending too many requests, slow down!')
                 return

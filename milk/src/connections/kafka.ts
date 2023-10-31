@@ -1,8 +1,8 @@
 import {KafkaConnection, Logger} from "@beemobot/common";
 // ^ This needs to be updated; Probably @beemobot/cafe
-import {TAG} from "../index.js";
 import {initKafkaClients} from "../kafka/clients.js";
 import {logIssue} from "./sentry.js";
+import {TAG} from "../constants/logging.js";
 
 export let kafka: KafkaConnection
 

@@ -1,7 +1,8 @@
 import * as Sentry from '@sentry/node';
 import {Logger} from "@beemobot/common";
 // ^ This needs to be updated; Probably @beemobot/cafe
-import {TAG} from "../index.js";
+
+import {TAG} from "../constants/logging.js";
 
 export async function run<T>(
     taskName: string,
