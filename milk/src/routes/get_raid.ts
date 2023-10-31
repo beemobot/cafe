@@ -6,7 +6,8 @@ import {FastifyInstance} from "fastify";
 import NodeCache from "node-cache";
 import {PublicRaidUser} from "../types/raid.js";
 
-const logsCache = new NodeCache({ stdTTL: 10 * 1000 * 60 })
+const TEN_MINUTES = 60 * 10
+const logsCache = new NodeCache({ stdTTL: TEN_MINUTES })
 
 type IdParameter = {Params:{ id: string } }
 export default async (fastify: FastifyInstance) => {
@@ -48,7 +49,7 @@ export default async (fastify: FastifyInstance) => {
             })
 
         let response: string
-        let shouldCache: boolean = users.length !== 0
+        const shouldCache: boolean = users.length !== 0
 
         if (isJsonContentType) {
             response = JSON.stringify({
