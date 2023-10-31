@@ -25,7 +25,10 @@ export default async (fastify: FastifyInstance) => {
         const cacheKey = acceptsJson ? id + ".json" : id
         const cachedResult = logsCache.get<string>(cacheKey)
         if (cachedResult != null) {
-            return reply.send(cachedResult)
+            return reply
+                .header('X-Cache', 'HIT')
+                .header('X-Cache-Expires', logsCache.getTtl(cacheKey))
+                .send(cachedResult)
         }
 
         if (id.includes(".")) {
@@ -93,6 +96,9 @@ export default async (fastify: FastifyInstance) => {
         }
 
         if (shouldCache) logsCache.set(cacheKey, response)
-        return reply.send(response)
+        return reply
+            .status(200)
+            .header('X-Cache', 'MISS')
+            .send(response)
     })
 }
