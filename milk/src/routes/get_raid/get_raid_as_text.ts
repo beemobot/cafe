@@ -1,7 +1,6 @@
 import {FastifyReply, FastifyRequest} from "fastify";
 import {useCacheWhenPossible} from "../../fastify/serve_cached.js";
-import {getRaidByExternalId} from "../../database/raid.js";
-import {getPublicRaidUsers} from "../../database/raid_users.js";
+import {getRaidByPublicId} from "../../database/raid.js";
 import {toDateString, toTimeString} from "../../utils/date.js";
 import {Logger} from "@beemobot/common";
 import {TAG} from "../../constants/logging.js";
@@ -10,18 +9,20 @@ import {RaidParameter} from "../get_raid.js";
 export async function route$GetRaidAsText(request: FastifyRequest<RaidParameter>, reply: FastifyReply): Promise<FastifyReply> {
     let { id } = request.params
     return await useCacheWhenPossible(reply, id, async () => {
-        const raid = await getRaidByExternalId(id)
+        const raid = await getRaidByPublicId(id)
 
         if (raid == null) {
             return reply.code(404).send('404 Not Found')
         }
 
-        const users = await getPublicRaidUsers(raid.internal_id)
+        const users = raid.users
 
         let response: string
         let startedDate = "N/A"
-        if (users.length > 0) {
-            startedDate = toDateString(users[0].joinedAt)
+
+        const firstUser = users.at(0)
+        if (firstUser != null) {
+            startedDate = toDateString(firstUser.joined_at)
         }
 
         response = 'Userbot raid detected against server ' + raid.guild_id + ' on ' + startedDate;
@@ -36,7 +37,7 @@ export async function route$GetRaidAsText(request: FastifyRequest<RaidParameter>
             response += '\n'
             let userIds = '';
             for (const user of users) {
-                response += toTimeString(user.joinedAt) + '   ' + user.id + '  ' + user.name
+                response += toTimeString(user.joined_at) + '   ' + user.id + '  ' + user.name
                 if (userIds !== '') {
                     userIds += '\n'
                 }
@@ -48,6 +49,9 @@ export async function route$GetRaidAsText(request: FastifyRequest<RaidParameter>
             response += '\n'
             response += userIds
         }
-        return {result: response, shouldCache: users.length !== 0}
+        return {
+            result: response,
+            shouldCache: raid.concluded_at != null || users.length > 2_000
+        }
     })
 }
