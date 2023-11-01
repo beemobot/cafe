@@ -3,7 +3,7 @@ import {Raid} from "@prisma/client";
 import {randomString} from "../utils/string.js";
 
 /**
- * Given an {@link externalId}, gets information about a given {@link Raid} with the {@link RaidUser}
+ * Given an {@link publicId}, gets information about a given {@link Raid} with the {@link RaidUser}
  * relation included.
  *
  * @param publicId the external id of the raid.
@@ -42,7 +42,7 @@ export const concludeRaid = async (publicId: string, id: string, concludedAt: Da
  * @param concludedAt the conclusion time of the raid, if provided.
  */
 export const createRaid = async (id: string, guildId: string, concludedAt: Date | null) => (
-    prisma.raid.create({
+    await prisma.raid.create({
         data: {
             id: id,
             public_id: randomString(12),

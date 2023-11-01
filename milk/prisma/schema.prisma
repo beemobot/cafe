@@ -9,7 +9,7 @@ datasource db {
 
 model RaidUser {
   raid        Raid?    @relation(fields: [raid_id], references: [id])
-  raid_id     String   @db.Uuid
+  raid_id     String
   id          BigInt
   name        String
   avatar_hash String?
@@ -20,7 +20,7 @@ model RaidUser {
 }
 
 model Raid {
-  id           String     @unique @db.Uuid
+  id           String     @unique
   public_id    String     @unique
   guild_id     BigInt
   concluded_at DateTime?  @db.Timestamptz

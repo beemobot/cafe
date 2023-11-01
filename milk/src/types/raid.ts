@@ -11,7 +11,7 @@ export type RaidManagementRequest = {
 }
 
 export type RaidManagementResponse = {
-    externalId: string
+    publicId: string
 }
 
 export type RaidManagementUser = {

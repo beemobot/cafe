@@ -43,12 +43,12 @@ export class RaidManagementClient extends BrokerClient<RaidManagementData> {
         Logger.info(TAG, `Concluding raid ${raidId} from guild ${guildIdString}.`)
         raid = await run(
             'conclude_raid',
-            async () => concludeRaid(raid!.external_id, raid!.internal_id, conclusionDate),
+            async () => concludeRaid(raid!.public_id, raid!.id, conclusionDate),
             0.2,
             25
         )
 
-        await message.respond({ response: { externalId: raid!.external_id }, request: null })
+        await message.respond({ response: { publicId: raid!.public_id }, request: null })
     }
     
     private async onBatchInsertRaidUsers(message: BrokerMessage<RaidManagementData>) {
@@ -63,8 +63,8 @@ export class RaidManagementClient extends BrokerClient<RaidManagementData> {
             Logger.info(TAG, `Inserting ${request.users.length} users to the raid ${request.raidId}.`)
             const users = request.users.map((user) =>  {
                 return {
-                    internal_raid_id: request.raidId,
-                    user_id: BigInt(user.idString),
+                    raid_id: request.raidId,
+                    id: BigInt(user.idString),
                     name: user.name,
                     avatar_hash: user.avatarHash,
                     created_at: new Date(user.createdAt),
@@ -92,6 +92,6 @@ export class RaidManagementClient extends BrokerClient<RaidManagementData> {
             )
         }
 
-        await message.respond({ response: { externalId: raid!.external_id }, request: null })
+        await message.respond({ response: { publicId: raid!.public_id }, request: null })
     }
 }

@@ -22,11 +22,9 @@ export async function initializeFastify() {
             return
         }
 
-        server.register(fastify =>  {
-            for (const attachable of [ErrorHook, LogHook, GetAntispam, DefaultRoute]) {
-                attachable(fastify)
-            }
-        })
+        for (const attachable of [ErrorHook, LogHook, GetAntispam, DefaultRoute]) {
+            attachable(server)
+        }
 
         const port = Number.parseInt(process.env.SERVER_PORT)
         await server.listen({
