@@ -6,6 +6,8 @@ import {Logger} from "@beemobot/common";
 import {TAG} from "../../constants/logging.js";
 import {RaidParameter} from "../get_raid.js";
 
+const numberFormatter = new Intl.NumberFormat('en-US')
+
 export async function route$GetRaidAsText(request: FastifyRequest<RaidParameter>, reply: FastifyReply): Promise<FastifyReply> {
     let { id } = request.params
     return await useCacheWhenPossible(reply, id, 'text', async () => {
@@ -31,7 +33,7 @@ export async function route$GetRaidAsText(request: FastifyRequest<RaidParameter>
             Logger.warn(TAG, `Raid ${id} reported no users.`)
             response += "\nThere are no users logged for this raid, at this moment. It is likely that the raid is still being processed, please come back later!"
         } else {
-            response += '\nRaid size: ' + users.length + ' accounts'
+            response += '\nRaid size: ' + numberFormatter.format(users.length) + ' accounts'
             response += '\n'
             response += '\n   Joined at:              ID:             Username:'
             response += '\n'
