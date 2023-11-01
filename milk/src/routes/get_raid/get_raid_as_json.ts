@@ -6,7 +6,7 @@ import {getPublicRaidUsers} from "../../database/raid_users.js";
 
 export async function route$GetRaidAsJson(request: FastifyRequest<RaidParameter>, reply: FastifyReply): Promise<FastifyReply> {
     let { id } = request.params
-    return await useCacheWhenPossible(reply, `${id}.json`, async () => {
+    return await useCacheWhenPossible(reply, `${id}.json`, 'application/json', async () => {
         const raid = await getRaidByPublicId(id)
 
         if (raid == null) {

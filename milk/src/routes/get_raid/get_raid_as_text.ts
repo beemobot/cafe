@@ -8,7 +8,7 @@ import {RaidParameter} from "../get_raid.js";
 
 export async function route$GetRaidAsText(request: FastifyRequest<RaidParameter>, reply: FastifyReply): Promise<FastifyReply> {
     let { id } = request.params
-    return await useCacheWhenPossible(reply, id, async () => {
+    return await useCacheWhenPossible(reply, id, 'text', async () => {
         const raid = await getRaidByPublicId(id)
 
         if (raid == null) {
@@ -37,10 +37,10 @@ export async function route$GetRaidAsText(request: FastifyRequest<RaidParameter>
             response += '\n'
             let userIds = '';
             for (const user of users) {
-                response += toTimeString(user.joined_at) + '   ' + user.id + '  ' + user.name
-                if (userIds !== '') {
-                    userIds += '\n'
-                }
+                response += '\n'
+                response += toTimeString(user.joined_at) + "   " + user.id + spaces((18 - user.id.toString().length + 3)) + user.name
+
+                userIds += '\n'
                 userIds += user.id
             }
 
@@ -54,4 +54,12 @@ export async function route$GetRaidAsText(request: FastifyRequest<RaidParameter>
             shouldCache: raid.concluded_at != null || users.length > 2_000
         }
     })
+}
+
+function spaces(num: number): string {
+    let whitespace = ""
+    while (whitespace.length < num) {
+        whitespace += " "
+    }
+    return whitespace
 }

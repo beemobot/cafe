@@ -6,6 +6,7 @@ const cache = new NodeCache({ stdTTL: TEN_MINUTES })
 export const useCacheWhenPossible = async (
     reply: FastifyReply,
     key: string,
+    contentType: string,
     computation:  () => Promise<{ result: string, shouldCache: boolean }>
 ): Promise<FastifyReply> => {
     const cachedResult = cache.get<string>(key)
@@ -13,6 +14,7 @@ export const useCacheWhenPossible = async (
         return reply
             .header('X-Cache', 'HIT')
             .header('X-Cache-Expires', cache.getTtl(key))
+            .header('Content-Type', contentType)
             .send(cachedResult)
     }
 
@@ -23,5 +25,6 @@ export const useCacheWhenPossible = async (
     return reply
         .status(200)
         .header('X-Cache', 'MISS')
+        .header('Content-Type', contentType)
         .send(result)
 }
