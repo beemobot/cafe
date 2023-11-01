@@ -1,13 +1,13 @@
 import {FastifyReply, FastifyRequest} from "fastify";
 import {useCacheWhenPossible} from "../../fastify/serve_cached.js";
-import {getRaid} from "../../database/raid.js";
+import {getRaidByExternalId} from "../../database/raid.js";
 import {getPublicRaidUsers} from "../../database/raid_users.js";
 import {RaidParameter} from "../get_raid.js";
 
 export async function route$GetRaidAsJson(request: FastifyRequest<RaidParameter>, reply: FastifyReply): Promise<FastifyReply> {
     let { id } = request.params
     return await useCacheWhenPossible(reply, `${id}.json`, async () => {
-        const raid = await getRaid(id)
+        const raid = await getRaidByExternalId(id)
 
         if (raid == null) {
             return reply.code(404).send('404 Not Found')

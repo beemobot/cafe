@@ -1,16 +1,17 @@
 import {BrokerClient, BrokerMessage, KafkaConnection, Logger} from "@beemobot/common";
 // ^ This needs to be updated; Probably @beemobot/cafe
-import {randomString} from "../../utils/string.js";
 import {run} from "../../utils/retry.js";
 import {RaidManagementData} from "../../types/raid.js";
 import {logIssue} from "../../connections/sentry.js";
-import {prisma} from "../../connections/prisma.js";
 import {TAG} from "../../constants/logging.js";
 import {
     RAID_MANAGEMENT_BATCH_INSERT_KEY,
     RAID_MANAGEMENT_CLIENT_TOPIC,
     RAID_MANAGEMENT_CONCLUDE_RAID
 } from "../../constants/raid_management_kafka.js";
+import {concludeRaid, createRaid, getRaidByInternalId} from "../../database/raid.js";
+import {RaidUser} from "@prisma/client";
+import {insertRaidUsers} from "../../database/raid_users.js";
 
 export class RaidManagementClient extends BrokerClient<RaidManagementData> {
     constructor(conn: KafkaConnection) {
@@ -32,7 +33,7 @@ export class RaidManagementClient extends BrokerClient<RaidManagementData> {
             concludedAt = new Date()
         }
 
-        let raid = await prisma.raid.findUnique({where: {internal_id: raidId}})
+        let raid = await getRaidByInternalId(raidId)
         if (raid == null) {
             logIssue(`Received a request to conclude a raid, but the raid is not in the database. [raid=${raidId}]`)
             return
@@ -46,10 +47,7 @@ export class RaidManagementClient extends BrokerClient<RaidManagementData> {
         Logger.info(TAG, `Concluding raid ${raidId} from guild ${guildIdString}.`)
         raid = await run(
             'conclude_raid',
-            async () => prisma.raid.update({
-                where: { external_id: raid!.external_id, internal_id: raidId },
-                data: { concluded_at: concludedAt }
-            }),
+            async () => concludeRaid(raid!.external_id, raid!.internal_id, concludedAt),
             0.2,
             25
         )
@@ -75,30 +73,23 @@ export class RaidManagementClient extends BrokerClient<RaidManagementData> {
                     avatar_hash: user.avatarHash,
                     created_at: user.createdAt,
                     joined_at: user.joinedAt
-                }
+                } satisfies RaidUser
             })
 
             await run(
                 'insert_raid_users',
-                async () => prisma.raidUser.createMany({data: users, skipDuplicates: true}),
+                async () => insertRaidUsers(users),
                 2,
                 25
             )
         }
 
-        let raid = await prisma.raid.findUnique({where: {internal_id: request.raidId}})
+        let raid = await getRaidByInternalId(request.raidId)
         if (raid == null) {
             Logger.info(TAG, `Creating raid ${request.raidId} from guild ${request.guildIdString}.`)
             raid = await run(
                 'create_raid',
-                async () => prisma.raid.create({
-                    data: {
-                        internal_id: request.raidId,
-                        external_id: randomString(12),
-                        guild_id: BigInt(request.guildIdString),
-                        concluded_at: request.concludedAt
-                    }
-                }),
+                async () => createRaid(request.raidId, request.guildIdString, request.concludedAt),
                 1,
                 25
             )

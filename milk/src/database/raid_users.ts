@@ -28,3 +28,10 @@ export const getPublicRaidUsers = async (internalId: string): Promise<PublicRaid
             avatarHash: user.avatar_hash
         } satisfies PublicRaidUser
     })
+
+/**
+ * Inserts many {@link RaidUser} to the database.
+ * @param users the users to insert into the database.
+ */
+export const insertRaidUsers = async (users: RaidUser[]) =>
+    (await prisma.raidUser.createMany({data: users, skipDuplicates: true}))
