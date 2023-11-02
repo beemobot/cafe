@@ -10,7 +10,7 @@ import {randomString} from "../utils/string.js";
  * @return {@link Raid} or null if it doesn't exist.
  */
 export const getRaidByPublicId = async (publicId: string) => {
-    return (await prisma.raid.findUnique({where: {public_id: publicId}, include: {users: true}}));
+    return (await prisma.raid.findUnique({where: {public_id: publicId}}));
 }
 
 /**

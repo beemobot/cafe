@@ -17,12 +17,14 @@ model RaidUser {
   joined_at   DateTime @db.Timestamptz
 
   @@id([raid_id, id])
+  @@index([joined_at])
 }
 
 model Raid {
   id           String     @unique
   public_id    String     @unique
   guild_id     BigInt
+  created_at   DateTime   @default(now()) @db.Timestamptz()
   concluded_at DateTime?  @db.Timestamptz
   users        RaidUser[]
 }

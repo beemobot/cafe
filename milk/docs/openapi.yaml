@@ -29,13 +29,21 @@ paths:
           required: true
           schema:
             type: string
+        - name: cursor
+          in: query
+          description: The last `joined_at` date to query the next page, found in the `next` property.
+          required:  false
+          schema:
+            type: string
+            format: date
+            example: '2023-10-30T16:10:57.697Z'
       responses:
         '200':
           description: Raid found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Raid'
+                $ref: '#/components/schemas/CursoredRaid'
           headers:
             'X-Cache':
               description: 'Indicates whether the response was cached or not.'
@@ -51,8 +59,31 @@ paths:
                 example: '1698767766556'
         '404':
           description: Raid not found
+        '400':
+          description: Invalid date provided for `cursor` query string.
 components:
   schemas:
+    CursoredRaid:
+      type: object
+      properties:
+        raid:
+          $ref: '#/components/schemas/Raid'
+        users:
+          type: object
+          properties:
+            next:
+              type: string
+              format: date
+              example: '2023-10-30T15:29:57.697Z'
+              nullable: true
+            size:
+              type: integer
+              format: int32
+              example: 200
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/RaidUser'
     Raid:
       type: object
       properties:
@@ -74,10 +105,6 @@ components:
           type: string
           format: int64
           example: '697474023914733575'
-        users:
-          type: array
-          items:
-            $ref: '#/components/schemas/RaidUser'
     RaidUser:
       type: object
       properties:

@@ -7,8 +7,13 @@ export type RaidParameter = {
     Params: { id: string }
 }
 
+export type CursoredRaidParameter = {
+    Params: { id: string },
+    Querystring: { cursor: string | null }
+}
+
 export default async (fastify: FastifyInstance) => {
     fastify.get<RaidParameter>('/antispam/:id', route$GetAntispam)
     fastify.get<RaidParameter>('/raid/:id', route$GetRaidAsText)
-    fastify.get<RaidParameter>('/raid/:id.json', route$GetRaidAsJson)
+    fastify.get<CursoredRaidParameter>('/raid/:id.json', route$GetRaidAsJson)
 }
