@@ -4,11 +4,11 @@ import {Server} from "../types/server.js";
 import {Logger} from "@beemobot/common";
 // ^ This needs to be updated; Probably @beemobot/cafe
 import {kafka} from "../connections/kafka.js";
-import {KEY_SET_PREMIUM_PLAN, PREMIUM_PLAN_TOPIC} from "../kafka/clients/PremiumManagentClient.js";
 import {createPremiumManagementData, createRecordHeaders} from "./kafka.js";
 import {sendWebhook} from "./discord.js";
 import {NO_PLAN} from "../constants/plans.js";
 import {TAG} from "../constants/logging.js";
+import {KEY_SET_PREMIUM_PLAN, PREMIUM_PLAN_TOPIC} from "../constants/kafka.js";
 
 export function determinePlan(subscription: ChargebeeSubscription): string {
     if (subscription.status !== 'active') return NO_PLAN

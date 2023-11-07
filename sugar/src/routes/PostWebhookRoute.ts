@@ -3,8 +3,8 @@ import { ValidationError } from "runtypes";
 import express from "express";
 import { Server } from "../types/server.js";
 import * as Sentry from '@sentry/node';
-import {createTaskName, retriable} from "../utils/utils.js";
 import {determinePlan, updatePlan} from "../utils/plans.js";
+import {createTaskName, run} from "../utils/retry.js";
 
 const router = express.Router()
 
@@ -53,7 +53,7 @@ router.post('/webhook/', async (request, response) => {
         response.sendStatus(204)
 
         const server: Server = { id: subscription.cf_discord_server_id }
-        retriable(createTaskName(subscription, customer),
+        run(createTaskName(subscription, customer),
             async () => await updatePlan(server, determinePlan(subscription), subscription, customer))
     } catch (exception: any) {
         if (exception instanceof ValidationError) {
