@@ -1,11 +1,11 @@
 import {Server} from "../types/server.js";
 import {ChargebeeCustomer, ChargebeeSubscription} from "../types/chargebee.js";
-import {DiscordWebhook} from "../connections/discord.js";
 import {Colors} from "discord.js";
+import {sendDiscordMessage} from "../connections/discord.js";
 
 export function sendWebhook(server: Server, plan: string, subscription: ChargebeeSubscription, customer: ChargebeeCustomer) {
     if (plan !== 'none') {
-        DiscordWebhook.send({
+        sendDiscordMessage({
             embeds: [
                 {
                     title: 'Subscription Activated',
@@ -28,7 +28,7 @@ export function sendWebhook(server: Server, plan: string, subscription: Chargebe
         return
     }
 
-    DiscordWebhook.send({
+    sendDiscordMessage({
         embeds: [
             {
                 title: 'Subscription Cancelled',

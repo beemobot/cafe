@@ -1,8 +1,8 @@
 import {Logger} from "@beemobot/common";
 // ^ This needs to be updated; Probably @beemobot/cafe
-import {TAG} from "../index.js";
 import {ChargebeeCustomer, ChargebeeSubscription} from "../types/chargebee.js";
 import * as Sentry from '@sentry/node';
+import {TAG} from "../constants/logging.js";
 
 export function retriable(task: string, action: () => Promise<void>, retries: number = 1) {
     action()

@@ -7,5 +7,5 @@ export function createPremiumManagementData(server: Server, plan: string) {
 }
 
 export function createRecordHeaders() {
-    return new KafkaMessageHeaders('sugar-sugar', '-2')
+    return new KafkaMessageHeaders('sugar', '-2')
 }

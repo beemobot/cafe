@@ -4,26 +4,25 @@ import GetWebhookRoute from "../routes/PostWebhookRoute.js";
 import * as Sentry from '@sentry/node';
 import {Logger} from "@beemobot/common";
 // ^ This needs to be updated; Probably @beemobot/cafe
-import {TAG} from "../index.js";
+
+import {TAG} from "../constants/logging.js";
 export const server = express()
 
-function init() {
+export function initExpressServer() {
     const username = process.env.BASIC_AUTH_USERNAME
     const password = process.env.BASIC_AUTH_PASSWORD
 
     if (username == null || password == null) {
-        Logger.error(TAG, 'Basic authentication is not configured, discarding request to start.')
+        Logger.error(TAG, 'Basic authentication is not configured, it must be configured for authentication purposes.')
         process.exit()
-        return
     }
 
     let account: any = {}
     account[username] = password
 
     if (process.env.SERVER_PORT == null) {
-        Logger.error(TAG, 'Server is not configured, discarding request to start.')
+        Logger.error(TAG, 'SERVER_PORT is a required configuration, and must be configured to start the HTTP server.')
         process.exit()
-        return
     }
 
     server
@@ -38,11 +37,9 @@ function init() {
         .use(GetWebhookRoute)
 
     server.listen(process.env.SERVER_PORT, () => {
-        Logger.info(TAG, 'Sugar Sugar is now ready to receive connections. ' + JSON.stringify({
+        Logger.info(TAG, 'Sugar is now ready to receive connections. ' + JSON.stringify({
             connection: 'http://localhost:' + process.env.SERVER_PORT,
             webhook: 'http://localhost:' + process.env.SERVER_PORT + "/webhook"
         }))
     })
 }
-
-export const Expresso = { init: init }
