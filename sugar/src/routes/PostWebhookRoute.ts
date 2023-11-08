@@ -5,6 +5,7 @@ import { Server } from "../types/server.js";
 import * as Sentry from '@sentry/node';
 import {determinePlan, updatePlan} from "../utils/plans.js";
 import {createTaskName, run} from "../utils/retry.js";
+import {THREE_DAYS} from "../constants/time.js";
 
 const router = express.Router()
 
@@ -43,7 +44,15 @@ router.post('/webhook/', async (request, response) => {
             return
         }
 
-        processed_events.add(event.id)
+        const eventId = event.id
+
+        processed_events.add(eventId)
+
+        // According to https://www.chargebee.com/docs/2.0/webhook_settings.html#automatic-retries, retries only
+        // happen up until the second day (7th retry), which means we can be clear of any potential duplicate
+        // event by then.
+        setTimeout(() => processed_events.delete(eventId), THREE_DAYS)
+
         const subscription: ChargebeeSubscription = event.content.subscription
         const customer: ChargebeeCustomer = event.content.customer
 
