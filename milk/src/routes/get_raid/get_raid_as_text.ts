@@ -30,7 +30,10 @@ export async function route$GetRaidAsText(request: FastifyRequest<RaidParameter>
             Logger.warn(TAG, `Raid ${id} reported no users.`)
             response += "\nThere are no users logged for this raid, at this moment. It is likely that the raid is still being processed, please come back later!"
         } else {
-            response += '\nRaid size: ' + numberFormatter.format(count) + ' accounts' + (count > 2_000 ? ` (Limited to 2,000 accounts. Read ${JSON_API_DOCUMENTATIONS} for more information).` : '.')
+            response += '\nRaid size: ' + numberFormatter.format(count) + ' accounts'
+            if (count > 2_000) {
+                response += `\nTo view beyond 2,000 accounts, see ${JSON_API_DOCUMENTATIONS} for more information.`
+            }
             response += '\n'
             response += '\n   Joined at:              ID:             Username:'
             response += '\n'
