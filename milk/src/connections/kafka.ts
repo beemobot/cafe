@@ -18,7 +18,7 @@ export async function initializeKafka() {
     Logger.info(TAG, "Attempting to connect to Kafka " + JSON.stringify({ host: process.env.KAFKA_HOST }))
 
     kafka = new KafkaConnection(process.env.KAFKA_HOST, "milk", "milk", "-5")
-    await kafka.start()
-
     initKafkaClients(kafka)
+
+    await kafka.start()
 }
