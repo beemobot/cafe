@@ -26,8 +26,8 @@ export class RaidManagementClient extends BrokerClient<RaidManagementData> {
             return
         }
 
-        let {raidId, concludedAt, guildIdString} = message.value.request
-        let conclusionDate: Date = new Date(concludedAt ?? Date.now())
+        let {raidId, concludedAtMillis, guildId} = message.value.request
+        let conclusionDate: Date = new Date(concludedAtMillis ?? Date.now())
 
         let raid = await getRaidByInternalId(raidId)
         if (raid == null) {
@@ -40,7 +40,7 @@ export class RaidManagementClient extends BrokerClient<RaidManagementData> {
             return
         }
 
-        Logger.info(TAG, `Concluding raid ${raidId} from guild ${guildIdString}.`)
+        Logger.info(TAG, `Concluding raid ${raidId} from guild ${guildId}.`)
         raid = await run(
             'conclude_raid',
             async () => concludeRaid(raid!.public_id, raid!.id, conclusionDate),
@@ -64,11 +64,11 @@ export class RaidManagementClient extends BrokerClient<RaidManagementData> {
             const users = request.users.map((user) =>  {
                 return {
                     raid_id: request.raidId,
-                    id: BigInt(user.idString),
+                    id: BigInt(user.id),
                     name: user.name,
                     avatar_hash: user.avatarHash,
-                    created_at: new Date(user.createdAt),
-                    joined_at: new Date(user.joinedAt)
+                    created_at: new Date(user.createdAtMillis),
+                    joined_at: new Date(user.joinedAtMillis)
                 } satisfies RaidUser
             })
 
@@ -82,11 +82,11 @@ export class RaidManagementClient extends BrokerClient<RaidManagementData> {
 
         let raid = await getRaidByInternalId(request.raidId)
         if (raid == null) {
-            let conclusionDate = new Date(request.concludedAt ?? Date.now())
-            Logger.info(TAG, `Creating raid ${request.raidId} from guild ${request.guildIdString}.`)
+            let conclusionDate = new Date(request.concludedAtMillis ?? Date.now())
+            Logger.info(TAG, `Creating raid ${request.raidId} from guild ${request.guildId}.`)
             raid = await run(
                 'create_raid',
-                async () => createRaid(request.raidId, request.guildIdString, conclusionDate),
+                async () => createRaid(request.raidId, request.guildId, conclusionDate),
                 1,
                 25
             )

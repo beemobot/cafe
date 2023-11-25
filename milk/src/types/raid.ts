@@ -5,9 +5,9 @@ export type RaidManagementData = {
 
 export type RaidManagementRequest = {
     raidId: string,
-    guildIdString: string,
+    guildId: string,
     users: RaidManagementUser[],
-    concludedAt: string | null
+    concludedAtMillis: number | null
 }
 
 export type RaidManagementResponse = {
@@ -15,11 +15,11 @@ export type RaidManagementResponse = {
 }
 
 export type RaidManagementUser = {
-    idString: string,
+    id: string,
     name: string,
     avatarHash: string | null,
-    createdAt: string,
-    joinedAt: string
+    createdAtMillis: number,
+    joinedAtMillis: number
 }
 
 export type PublicRaidUser = {
