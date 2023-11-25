@@ -109,6 +109,7 @@ class KafkaConnection(
         super.on(topic, cb)
     }
 
+    @Synchronized
     private fun createTopics() {
         val listeningTopics = topicListeners.keys
         log.debug("Creating missing topics, target topics: $listeningTopics")
@@ -187,10 +188,8 @@ class KafkaConnection(
                 if (ex is MissingSourceTopicException) {
                     log.info("Got MissingSourceTopicException in Consumer, trying to re-create missing topics")
                     try {
-                        synchronized(::createTopics) {
-                            createTopics()
-                        }
-                    } catch (t: Throwable) {
+                        createTopics()
+                    } catch (t: Exception) {
                         log.error(
                             "Error in KafkaStreams: Got MissingSourceTopicException but couldn't re-create topics",
                             t
