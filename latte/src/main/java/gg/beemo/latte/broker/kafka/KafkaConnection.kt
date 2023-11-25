@@ -4,7 +4,6 @@ import gg.beemo.latte.broker.BaseBrokerMessageHeaders
 import gg.beemo.latte.broker.BrokerConnection
 import gg.beemo.latte.broker.TopicListener
 import gg.beemo.latte.logging.log
-import kotlinx.coroutines.*
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin.AdminClient
 import org.apache.kafka.clients.admin.NewTopic
@@ -22,14 +21,13 @@ import org.apache.kafka.streams.errors.MissingSourceTopicException
 import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler
 import org.apache.kafka.streams.processor.api.ProcessorSupplier
 import org.apache.kafka.streams.processor.api.Record
-import java.lang.IllegalArgumentException
 import java.util.*
 
 
 class KafkaConnection(
     kafkaHosts: Array<String>,
     override val clientId: String,
-    private val consumerGroupId: String,
+    private val instanceId: String,
     override val clusterId: String,
     private val useTls: Boolean = false,
 ) : BrokerConnection() {
@@ -112,13 +110,13 @@ class KafkaConnection(
     @Synchronized
     private fun createTopics() {
         val listeningTopics = topicListeners.keys
-        log.debug("Creating missing topics, target topics: $listeningTopics")
+        log.debug("Creating missing topics, target topics: {}", listeningTopics)
         val props = createConnectionProperties()
         val client = AdminClient.create(props)
 
         val existingTopics = client.listTopics().names().get()
         val missingTopics = listeningTopics.filter { !existingTopics.contains(it) }
-        log.debug("Missing topics: $missingTopics")
+        log.debug("Missing topics: {}", missingTopics)
         if (missingTopics.isNotEmpty()) {
             client.createTopics(
                 // TODO: Figure out how to set replication factor and partition count
@@ -161,7 +159,7 @@ class KafkaConnection(
         props[StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG] = Serdes.String().javaClass
         props[StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG] = Serdes.String().javaClass
         // Name of this client for group management
-        props[StreamsConfig.APPLICATION_ID_CONFIG] = consumerGroupId
+        props[StreamsConfig.APPLICATION_ID_CONFIG] = instanceId
         // Max time a task may stall and retry due to errors
         props[StreamsConfig.TASK_TIMEOUT_MS_CONFIG] = 5_000
         // "Note that exactly-once processing requires a cluster of at least three brokers by default"
@@ -210,7 +208,7 @@ class KafkaConnection(
         this[CommonClientConfigs.SECURITY_PROTOCOL_CONFIG] =
             if (useTls) SecurityProtocol.SSL.name else SecurityProtocol.PLAINTEXT.name
         // Readable name of this client for debugging purposes
-        this[CommonClientConfigs.CLIENT_ID_CONFIG] = consumerGroupId
+        this[CommonClientConfigs.CLIENT_ID_CONFIG] = instanceId
         // Max time for the server to respond to a request
         this[CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG] = 10_000
         // Amount of times to retry a failed request
