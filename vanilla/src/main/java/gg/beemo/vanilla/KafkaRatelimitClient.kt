@@ -49,7 +49,7 @@ class RatelimitClient(conn: BrokerConnection) : BrokerClient<RatelimitClientData
         log.debug("Incoming '$type' quota request from client '$client' in cluster $sourceCluster")
         ratelimitProvider.getClientRatelimit(client).requestQuota()
         log.debug("Granted '$type' quota request for client '$client' in cluster $sourceCluster")
-        msg.respond(null, false)
+        msg.respond(null)
     }
 
 }
