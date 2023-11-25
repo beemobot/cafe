@@ -11,6 +11,7 @@ import org.apache.kafka.clients.admin.NewTopic
 import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.clients.producer.ProducerConfig
 import org.apache.kafka.clients.producer.ProducerRecord
+import org.apache.kafka.clients.producer.RecordMetadata
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.serialization.Serdes
 import org.apache.kafka.common.serialization.StringSerializer
@@ -46,27 +47,31 @@ class KafkaConnection(
         key: String,
         value: String,
         headers: BaseBrokerMessageHeaders,
-        blocking: Boolean,
     ): String {
-        if (headers !is KafkaMessageHeaders) {
-            throw IllegalArgumentException("KafkaConnection requires headers of type KafkaMessageHeaders to be passed, got ${headers.javaClass.name} instead")
+        require(headers is KafkaMessageHeaders) {
+            "KafkaConnection requires headers of type KafkaMessageHeaders to be passed, got ${headers.javaClass.name} instead"
         }
 
         if (shouldDispatchExternallyAfterShortCircuit(topic, key, value, headers)) {
 
-            val producer = this.producer ?: throw IllegalStateException("Producer is not initialized")
+            val producer = this.producer
+            checkNotNull(producer) { "Producer is not initialized" }
             val record = ProducerRecord(topic, key, value)
             headers.applyTo(record.headers())
 
-            if (blocking) {
-                withContext(Dispatchers.IO) {
-                    // This can block for up to max.block.ms while gathering metadata.
-                    // The request itself will be sent async, once the metadata is fetched.
-                    producer.send(record).get()
+            // Asynchronously enqueue message
+            producer.send(record) { metadata: RecordMetadata, ex: Exception? ->
+                if (ex != null) {
+                    log.error("Error enqueueing Kafka message", ex)
+                } else {
+                    log.trace(
+                        "Enqueued message with key {} as request id {} into topic {} at offset {}",
+                        key,
+                        headers.requestId,
+                        metadata.topic(),
+                        metadata.offset(),
+                    )
                 }
-            } else {
-                // When no blocking is requested, just throw the message into the void and hope for the best.
-                producer.send(record)
             }
         }
 
@@ -115,6 +120,7 @@ class KafkaConnection(
         log.debug("Missing topics: $missingTopics")
         if (missingTopics.isNotEmpty()) {
             client.createTopics(
+                // TODO: Figure out how to set replication factor and partition count
                 missingTopics.map { NewTopic(it, 1, 1) }
             ).all().get()
         }

@@ -7,8 +7,8 @@ data class BrokerMessage<T : Any>(
     val headers: BaseBrokerMessageHeaders
 ) {
 
-    suspend fun respond(data: T?, blocking: Boolean = true) {
-        client.respond(this, data, blocking)
+    suspend fun respond(data: T?) {
+        client.respond(this, data)
     }
 
 }

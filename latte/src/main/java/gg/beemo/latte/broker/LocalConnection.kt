@@ -11,7 +11,6 @@ class LocalConnection(
         key: String,
         value: String,
         headers: BaseBrokerMessageHeaders,
-        blocking: Boolean,
     ): String {
         if (shouldDispatchExternallyAfterShortCircuit(topic, key, value, headers) && headers.targetClusters.isNotEmpty()) {
             throw IllegalArgumentException("Attempting to send message to other cluster(s) ${headers.targetClusters} in a LocalConnection")
