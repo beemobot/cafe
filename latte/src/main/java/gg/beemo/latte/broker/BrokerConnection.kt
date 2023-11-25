@@ -32,7 +32,6 @@ abstract class BrokerConnection {
         key: String,
         value: String,
         headers: BaseBrokerMessageHeaders,
-        blocking: Boolean = true,
     ): String
 
     abstract fun createHeaders(

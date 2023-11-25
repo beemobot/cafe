@@ -19,16 +19,10 @@ fun interface BrokerMessageListener<T : Any> {
 }
 
 open class BrokerClient<T : Any>(
-    private val connection: BrokerConnection,
+    protected val connection: BrokerConnection,
     type: Class<T>,
     private val topicName: String
 ) {
-
-    val clusterId: String
-        get() = connection.clusterId
-
-    val clientId: String
-        get() = connection.clientId
 
     private val moshi = Moshi.Builder().build()
     private val adapter = moshi.adapter(type).nullSafe()
@@ -43,9 +37,8 @@ open class BrokerClient<T : Any>(
         key: String,
         obj: T?,
         headers: BaseBrokerMessageHeaders = this.connection.createHeaders(),
-        blocking: Boolean = true,
     ): String {
-        return connection.send(topicName, key, stringify(obj), headers, blocking)
+        return connection.send(topicName, key, stringify(obj), headers)
     }
 
     protected suspend fun sendClusterRequest(
@@ -54,7 +47,6 @@ open class BrokerClient<T : Any>(
         timeout: Duration = Duration.ZERO,
         targetClusters: Set<String> = emptySet(),
         expectedResponses: Int? = null,
-        blocking: Boolean = true,
         messageCallback: BrokerMessageListener<T>? = null,
     ): Pair<Map<String, BrokerMessage<T>>, Boolean> {
         val responseKey = key.toResponseKey()
@@ -85,7 +77,7 @@ open class BrokerClient<T : Any>(
         try {
             val headers = this.connection.createHeaders(targetClusters)
             requestId.set(headers.requestId)
-            send(key, obj, headers, blocking)
+            send(key, obj, headers)
 
             if (timeout <= Duration.ZERO) {
                 latch.await()
@@ -120,7 +112,6 @@ open class BrokerClient<T : Any>(
     internal suspend fun respond(
         msg: BrokerMessage<T>,
         data: T?,
-        blocking: Boolean = true,
     ) {
         val newHeaders = this.connection.createHeaders(
             setOf(msg.headers.sourceCluster),
@@ -130,7 +121,6 @@ open class BrokerClient<T : Any>(
             msg.key.toResponseKey(),
             data,
             newHeaders,
-            blocking,
         )
     }
 

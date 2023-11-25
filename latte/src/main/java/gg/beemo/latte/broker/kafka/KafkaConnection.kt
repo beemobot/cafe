@@ -4,13 +4,13 @@ import gg.beemo.latte.broker.BaseBrokerMessageHeaders
 import gg.beemo.latte.broker.BrokerConnection
 import gg.beemo.latte.broker.TopicListener
 import gg.beemo.latte.logging.log
-import kotlinx.coroutines.*
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin.AdminClient
 import org.apache.kafka.clients.admin.NewTopic
 import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.clients.producer.ProducerConfig
 import org.apache.kafka.clients.producer.ProducerRecord
+import org.apache.kafka.clients.producer.RecordMetadata
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.serialization.Serdes
 import org.apache.kafka.common.serialization.StringSerializer
@@ -21,14 +21,13 @@ import org.apache.kafka.streams.errors.MissingSourceTopicException
 import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler
 import org.apache.kafka.streams.processor.api.ProcessorSupplier
 import org.apache.kafka.streams.processor.api.Record
-import java.lang.IllegalArgumentException
 import java.util.*
 
 
 class KafkaConnection(
     kafkaHosts: Array<String>,
     override val clientId: String,
-    private val consumerGroupId: String,
+    private val instanceId: String,
     override val clusterId: String,
     private val useTls: Boolean = false,
 ) : BrokerConnection() {
@@ -37,38 +36,40 @@ class KafkaConnection(
 
     private var producer: KafkaProducer<String, String>? = null
     private var consumer: KafkaStreams? = null
-    private var shutdownHook: Thread? = null
 
     private val isRunning: Boolean
-        // The `shutdownHook` is assigned a value as the last step of `start()`
-        get() = shutdownHook != null
+        get() = producer != null && consumer != null
 
     override suspend fun send(
         topic: String,
         key: String,
         value: String,
         headers: BaseBrokerMessageHeaders,
-        blocking: Boolean,
     ): String {
-        if (headers !is KafkaMessageHeaders) {
-            throw IllegalArgumentException("KafkaConnection requires headers of type KafkaMessageHeaders to be passed, got ${headers.javaClass.name} instead")
+        require(headers is KafkaMessageHeaders) {
+            "KafkaConnection requires headers of type KafkaMessageHeaders to be passed, got ${headers.javaClass.name} instead"
         }
 
         if (shouldDispatchExternallyAfterShortCircuit(topic, key, value, headers)) {
 
-            val producer = this.producer ?: throw IllegalStateException("Producer is not initialized")
+            val producer = this.producer
+            checkNotNull(producer) { "Producer is not initialized" }
             val record = ProducerRecord(topic, key, value)
             headers.applyTo(record.headers())
 
-            if (blocking) {
-                withContext(Dispatchers.IO) {
-                    // This can block for up to max.block.ms while gathering metadata.
-                    // The request itself will be sent async, once the metadata is fetched.
-                    producer.send(record).get()
+            // Asynchronously enqueue message
+            producer.send(record) { metadata: RecordMetadata, ex: Exception? ->
+                if (ex != null) {
+                    log.error("Error enqueueing Kafka message", ex)
+                } else {
+                    log.trace(
+                        "Enqueued message with key {} as request id {} into topic {} at offset {}",
+                        key,
+                        headers.requestId,
+                        metadata.topic(),
+                        metadata.offset(),
+                    )
                 }
-            } else {
-                // When no blocking is requested, just throw the message into the void and hope for the best.
-                producer.send(record)
             }
         }
 
@@ -81,12 +82,6 @@ class KafkaConnection(
         createTopics()
         createProducer()
         createConsumer()
-
-        shutdownHook = Thread({
-            shutdownHook = null
-            destroy()
-        }, "Kafka Connection ($consumerGroupId) Shutdown Hook")
-        Runtime.getRuntime().addShutdownHook(shutdownHook)
         log.debug("Kafka Connection is fully initialized")
     }
 
@@ -96,8 +91,6 @@ class KafkaConnection(
         consumer = null
         producer?.close()
         producer = null
-        shutdownHook?.let { Runtime.getRuntime().removeShutdownHook(it) }
-        shutdownHook = null
     }
 
     override fun createHeaders(targetClusters: Set<String>?, requestId: String?): BaseBrokerMessageHeaders {
@@ -114,17 +107,19 @@ class KafkaConnection(
         super.on(topic, cb)
     }
 
+    @Synchronized
     private fun createTopics() {
         val listeningTopics = topicListeners.keys
-        log.debug("Creating missing topics, target topics: $listeningTopics")
+        log.debug("Creating missing topics, target topics: {}", listeningTopics)
         val props = createConnectionProperties()
         val client = AdminClient.create(props)
 
         val existingTopics = client.listTopics().names().get()
         val missingTopics = listeningTopics.filter { !existingTopics.contains(it) }
-        log.debug("Missing topics: $missingTopics")
+        log.debug("Missing topics: {}", missingTopics)
         if (missingTopics.isNotEmpty()) {
             client.createTopics(
+                // TODO: Figure out how to set replication factor and partition count
                 missingTopics.map { NewTopic(it, 1, 1) }
             ).all().get()
         }
@@ -164,7 +159,7 @@ class KafkaConnection(
         props[StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG] = Serdes.String().javaClass
         props[StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG] = Serdes.String().javaClass
         // Name of this client for group management
-        props[StreamsConfig.APPLICATION_ID_CONFIG] = consumerGroupId
+        props[StreamsConfig.APPLICATION_ID_CONFIG] = instanceId
         // Max time a task may stall and retry due to errors
         props[StreamsConfig.TASK_TIMEOUT_MS_CONFIG] = 5_000
         // "Note that exactly-once processing requires a cluster of at least three brokers by default"
@@ -191,10 +186,8 @@ class KafkaConnection(
                 if (ex is MissingSourceTopicException) {
                     log.info("Got MissingSourceTopicException in Consumer, trying to re-create missing topics")
                     try {
-                        synchronized(::createTopics) {
-                            createTopics()
-                        }
-                    } catch (t: Throwable) {
+                        createTopics()
+                    } catch (t: Exception) {
                         log.error(
                             "Error in KafkaStreams: Got MissingSourceTopicException but couldn't re-create topics",
                             t
@@ -215,7 +208,7 @@ class KafkaConnection(
         this[CommonClientConfigs.SECURITY_PROTOCOL_CONFIG] =
             if (useTls) SecurityProtocol.SSL.name else SecurityProtocol.PLAINTEXT.name
         // Readable name of this client for debugging purposes
-        this[CommonClientConfigs.CLIENT_ID_CONFIG] = consumerGroupId
+        this[CommonClientConfigs.CLIENT_ID_CONFIG] = instanceId
         // Max time for the server to respond to a request
         this[CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG] = 10_000
         // Amount of times to retry a failed request
