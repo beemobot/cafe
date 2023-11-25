@@ -37,11 +37,9 @@ class KafkaConnection(
 
     private var producer: KafkaProducer<String, String>? = null
     private var consumer: KafkaStreams? = null
-    private var shutdownHook: Thread? = null
 
     private val isRunning: Boolean
-        // The `shutdownHook` is assigned a value as the last step of `start()`
-        get() = shutdownHook != null
+        get() = producer != null && consumer != null
 
     override suspend fun send(
         topic: String,
@@ -81,12 +79,6 @@ class KafkaConnection(
         createTopics()
         createProducer()
         createConsumer()
-
-        shutdownHook = Thread({
-            shutdownHook = null
-            destroy()
-        }, "Kafka Connection ($consumerGroupId) Shutdown Hook")
-        Runtime.getRuntime().addShutdownHook(shutdownHook)
         log.debug("Kafka Connection is fully initialized")
     }
 
@@ -96,8 +88,6 @@ class KafkaConnection(
         consumer = null
         producer?.close()
         producer = null
-        shutdownHook?.let { Runtime.getRuntime().removeShutdownHook(it) }
-        shutdownHook = null
     }
 
     override fun createHeaders(targetClusters: Set<String>?, requestId: String?): BaseBrokerMessageHeaders {
