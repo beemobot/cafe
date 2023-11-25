@@ -19,16 +19,10 @@ fun interface BrokerMessageListener<T : Any> {
 }
 
 open class BrokerClient<T : Any>(
-    private val connection: BrokerConnection,
+    protected val connection: BrokerConnection,
     type: Class<T>,
     private val topicName: String
 ) {
-
-    val clusterId: String
-        get() = connection.clusterId
-
-    val clientId: String
-        get() = connection.clientId
 
     private val moshi = Moshi.Builder().build()
     private val adapter = moshi.adapter(type).nullSafe()
