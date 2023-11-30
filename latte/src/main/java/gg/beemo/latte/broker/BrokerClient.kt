@@ -1,5 +1,6 @@
 package gg.beemo.latte.broker
 
+import com.squareup.moshi.JsonAdapter
 import com.squareup.moshi.Moshi
 import gg.beemo.latte.logging.log
 import gg.beemo.latte.util.SuspendingCountDownLatch
@@ -18,30 +19,55 @@ fun interface BrokerMessageListener<T : Any> {
     suspend fun onMessage(clusterId: String, msg: BrokerMessage<T>)
 }
 
-open class BrokerClient<T : Any>(
-    protected val connection: BrokerConnection,
-    type: Class<T>,
-    private val topicName: String
+private class TopicData<T : Any>(
+    val type: Class<T>,
+    val adapter: JsonAdapter<T>,
+    val listeners: MutableMap<String, BrokerEventListener<T>>,
 ) {
 
-    private val moshi = Moshi.Builder().build()
-    private val adapter = moshi.adapter(type).nullSafe()
-    private val keyListeners = Collections.synchronizedMap(HashMap<String, MutableSet<BrokerEventListener<T>>>())
-
-    init {
-        log.debug("Initializing Broker Client with topic '$topicName' for objects of type ${type.name}")
-        connection.on(topicName, ::onTopicMessage)
+    fun parse(json: String): T? {
+        return adapter.fromJson(json)
     }
 
-    protected suspend fun send(
+    fun stringify(obj: T?): String {
+        return adapter.toJson(obj)
+    }
+
+}
+
+abstract class BrokerClient(
+    protected val connection: BrokerConnection,
+    // TODO initialize topics when registering event listeners instead?
+    initialTopics: Map<String, Class<Any>> = emptyMap(),
+) {
+
+    companion object {
+        // TODO Investigate if it's a good idea to add a global custom type adapter
+        //  to serialize large Longs as Strings for easier JS compatibility.
+        //  https://github.com/square/moshi#custom-type-adapters
+        private val moshi = Moshi.Builder().build()
+    }
+
+    private val topics: MutableMap<String, TopicData<*>> = Collections.synchronizedMap(HashMap())
+
+    init {
+        log.debug("Initializing Broker Client with topics '{}' for objects of type {}", topics, type.name)
+        connection.on(topics, ::onTopicMessage)
+    }
+
+    protected suspend fun <T : Any> send(
+        topic: String,
         key: String,
         obj: T?,
         headers: BaseBrokerMessageHeaders = this.connection.createHeaders(),
     ): String {
-        return connection.send(topicName, key, stringify(obj), headers)
+        val topicData = getTopicData(topic, obj)
+        requireNotNull(topicData) { "Attempting to send to unregistered topic $topic" }
+        return connection.send(topic, key, topicData.stringify(obj), headers)
     }
 
-    protected suspend fun sendClusterRequest(
+    protected suspend fun <T : Any> sendClusterRequest(
+        topic: String,
         key: String,
         obj: T?,
         timeout: Duration = Duration.ZERO,
@@ -72,12 +98,12 @@ open class BrokerClient<T : Any>(
             }
         }
 
-        on(responseKey, cb)
+        on(topic, responseKey, cb)
         var timeoutReached = false
         try {
             val headers = this.connection.createHeaders(targetClusters)
             requestId.set(headers.requestId)
-            send(key, obj, headers)
+            send(topic, key, obj, headers)
 
             if (timeout <= Duration.ZERO) {
                 latch.await()
@@ -85,31 +111,41 @@ open class BrokerClient<T : Any>(
                 timeoutReached = !latch.await(timeout)
             }
         } finally {
-            off(responseKey, cb)
+            off(topic, responseKey, cb)
         }
 
         return Pair(responses, timeoutReached)
     }
 
-    protected fun on(key: String, cb: BrokerEventListener<T>) {
-        val listeners = keyListeners.computeIfAbsent(key) {
-            CopyOnWriteArraySet()
-        }
-        listeners.add(cb)
+    protected inline fun <reified T : Any> on(topic: String, key: String, cb: BrokerEventListener<T>) {
+        on(topic, key, T::class.java, cb)
     }
 
-    protected fun off(key: String, cb: BrokerEventListener<T>) {
-        keyListeners.computeIfPresent(key) { _, listeners ->
-            listeners.remove(cb)
-            if (listeners.size == 0) {
+    protected fun <T : Any> on(topic: String, key: String, type: Class<T>, cb: BrokerEventListener<T>) {
+        val topicData = topics.computeIfAbsent(topic) {
+            val adapter = moshi.adapter(type).nullSafe()
+            TopicData(type, adapter, Collections.synchronizedMap(HashMap()))
+        }
+        require(topicData.type == type) {
+            "Topic '$topic' is already registered with type ${topicData.type.name}, " +
+                    "attempting to re-register it with type ${type.name}"
+        }
+        @Suppress("UNCHECKED_CAST") // Safe because of the above verification
+        (topicData as TopicData<T>).listeners[key] = cb
+    }
+
+    protected fun <T : Any> off(topic: String, key: String, cb: BrokerEventListener<T>) {
+        topics.computeIfPresent(topic) { _, topicData ->
+            topicData.listeners.remove(key, cb)
+            if (topicData.listeners.isEmpty()) {
                 null
             } else {
-                listeners
+                topicData
             }
         }
     }
 
-    internal suspend fun respond(
+    internal suspend fun <T : Any> respond(
         msg: BrokerMessage<T>,
         data: T?,
     ) {
@@ -122,14 +158,6 @@ open class BrokerClient<T : Any>(
             data,
             newHeaders,
         )
-    }
-
-    private fun parse(json: String): T? {
-        return adapter.fromJson(json)
-    }
-
-    private fun stringify(obj: T?): String {
-        return adapter.toJson(obj)
     }
 
     private suspend fun onTopicMessage(key: String, value: String, headers: BaseBrokerMessageHeaders) = coroutineScope {
@@ -145,6 +173,18 @@ open class BrokerClient<T : Any>(
                 }
             }
         }
+    }
+
+    private fun <T:Any> getTopicData(topic: String, obj: T?): TopicData<T>? {
+        val topicData = topics[topic] ?: return null
+        if (obj != null) {
+            require(topicData.type == obj::class.java) {
+                "Topic '$topic' is already registered with type ${topicData.type.name}, " +
+                        "attempting to send with type ${obj::class.java.name}"
+            }
+        }
+        @Suppress("UNCHECKED_CAST") // Safe because of the above verification
+        return topicData as TopicData<T>
     }
 
 }
