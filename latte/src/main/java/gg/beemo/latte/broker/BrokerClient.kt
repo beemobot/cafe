@@ -4,6 +4,7 @@ import com.squareup.moshi.JsonAdapter
 import com.squareup.moshi.Moshi
 import gg.beemo.latte.logging.log
 import gg.beemo.latte.util.SuspendingCountDownLatch
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import java.util.Collections
@@ -11,6 +12,7 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
 
 fun interface BrokerEventListener<T : Any> {
     suspend fun onMessage(msg: BrokerMessage<T>)
@@ -20,53 +22,167 @@ fun interface BrokerMessageListener<T : Any> {
     suspend fun onMessage(clusterId: String, msg: BrokerMessage<T>)
 }
 
-private class TopicMetadata(
-    val topic: String,
-    val keys: MutableMap<String, TopicKeyClient<out Any>>
-)
 
-class RpcClient<RequestType: Any, ResponseType: Any>
-
-class TopicKeyClient<T : Any>(
-    private val connection: BrokerConnection,
-    private val client: BrokerClient,
+sealed class BaseClient<OutgoingT : Any, IncomingT : Any>(
+    protected val connection: BrokerConnection,
+    protected val client: BrokerClient,
     val topic: String,
     val key: String,
-    val type: Class<T>,
+    protected val outgoingType: Class<OutgoingT>?,
+    protected val incomingType: Class<IncomingT>?,
+    callback: (suspend CoroutineScope.(IncomingT) -> OutgoingT)?,
 ) {
 
-    private val adapter: JsonAdapter<T> = moshi.adapter(type).nullSafe()
-    private val listeners: MutableList<BrokerEventListener<T>> = CopyOnWriteArrayList()
-
-    suspend fun send(
-        topic: String,
-        key: String,
-        obj: T?,
-        headers: BaseBrokerMessageHeaders = this.connection.createHeaders(),
-    ): String {
-        return connection.send(topic, key, stringify(obj), headers)
-    }
-
-    private fun parse(json: String): T? {
-        return adapter.fromJson(json)
-    }
-
-    private fun stringify(obj: T?): String {
-        return adapter.toJson(obj)
-    }
+    // TODO Should this class still exist?
 
     companion object {
         // TODO Investigate if it's a good idea to add a global custom type adapter
         //  to serialize large Longs as Strings for easier JS compatibility.
         //  https://github.com/square/moshi#custom-type-adapters
-        private val moshi = Moshi.Builder().build()
+        @JvmStatic
+        protected val moshi: Moshi = Moshi.Builder().build()
     }
 
 }
 
-abstract class BrokerClient(
-    protected val connection: BrokerConnection,
+
+class ProducerClient<OutgoingT : Any>(
+    connection: BrokerConnection,
+    client: BrokerClient,
+    topic: String,
+    key: String,
+    outgoingType: Class<OutgoingT>,
+) : BaseClient<OutgoingT, Unit>(
+    connection,
+    client,
+    topic,
+    key,
+    outgoingType,
+    null,
+    null,
 ) {
+
+    private val adapter: JsonAdapter<OutgoingT?> = moshi.adapter(outgoingType).nullSafe()
+
+    suspend fun send(
+        data: OutgoingT,
+        services: Set<String> = emptySet(),
+        instances: Set<String> = emptySet(),
+    ) {
+        val strigifiedData = stringifyOutgoing(data)
+        val headers = connection.createHeaders(services, instances)
+        connection.send(topic, key, strigifiedData, headers)
+    }
+
+    private fun stringifyOutgoing(data: OutgoingT?): String {
+        return adapter.toJson(data)
+    }
+
+}
+
+class ConsumerClient<IncomingT : Any>(
+    connection: BrokerConnection,
+    client: BrokerClient,
+    topic: String,
+    key: String,
+    incomingType: Class<IncomingT>,
+    callback: suspend CoroutineScope.(IncomingT) -> Unit,
+) : BaseClient<Unit, IncomingT>(
+    connection,
+    client,
+    topic,
+    key,
+    null,
+    incomingType,
+    callback,
+) {
+
+    private val adapter: JsonAdapter<IncomingT?> = moshi.adapter(incomingType).nullSafe()
+
+    private fun parseIncoming(json: String): IncomingT? {
+        return adapter.fromJson(json)
+    }
+
+}
+
+
+class RpcClient<OutgoingT : Any, IncomingT : Any>(
+    connection: BrokerConnection,
+    client: BrokerClient,
+    topic: String,
+    key: String,
+    outgoingType: Class<OutgoingT>,
+    incomingType: Class<IncomingT>,
+    callback: suspend CoroutineScope.(IncomingT) -> OutgoingT,
+) : BaseClient<OutgoingT, IncomingT>(
+    connection,
+    client,
+    topic,
+    key,
+    outgoingType,
+    incomingType,
+    callback,
+) {
+
+    private val producer = ProducerClient(connection, client, topic, key, outgoingType)
+    private val consumer = ConsumerClient(connection, client, topic, key, incomingType) {
+        TODO()
+    }
+
+    suspend fun call(
+        request: OutgoingT,
+        services: Set<String> = emptySet(),
+        instances: Set<String> = emptySet(),
+        timeout: Duration = 10.seconds,
+    ): IncomingT {
+        producer.send(request, services, instances)
+        TODO()
+    }
+
+}
+
+
+private class TopicMetadata(
+    val topic: String,
+    val keys: MutableMap<String, TopicKeyClient<out Any>>
+)
+
+abstract class BrokerClient(
+    @PublishedApi
+    internal val connection: BrokerConnection,
+) {
+
+    inline fun <reified T : Any> consumer(
+        topic: String,
+        key: String,
+        noinline callback: suspend CoroutineScope.(T) -> Unit,
+    ): ConsumerClient<T> {
+        return ConsumerClient(connection, this, topic, key, T::class.java, callback)
+    }
+
+    inline fun <reified T : Any> producer(
+        topic: String,
+        key: String,
+    ): ProducerClient<T> {
+        return ProducerClient(connection, this, topic, key, T::class.java)
+    }
+
+    inline fun <reified IncomingT : Any, reified OutgoingT : Any> rpc(
+        topic: String,
+        key: String,
+        noinline callback: suspend CoroutineScope.(IncomingT) -> OutgoingT,
+    ): RpcClient<IncomingT, OutgoingT> {
+        return RpcClient(connection, this, topic, key, IncomingT::class.java, OutgoingT::class.java, callback)
+    }
+
+    internal suspend fun send(
+        topic: String,
+        key: String,
+        data: String,
+        headers: BaseBrokerMessageHeaders = this.connection.createHeaders(),
+    ): String {
+        return connection.send(topic, key, data, headers)
+    }
 
     private val topics: MutableMap<String, TopicMetadata> = Collections.synchronizedMap(HashMap())
 
@@ -75,26 +191,6 @@ abstract class BrokerClient(
         connection.on(topics, ::onTopicMessage)
     }
 
-    protected suspend inline fun <reified T : Any> sendRpcRequest(
-        topic: String,
-        key: String,
-        obj: T?,
-        timeout: Duration = Duration.INFINITE,
-    ): BrokerMessage<T> {
-        return sendRpcRequest(topic, key, T::class.java, obj, timeout)
-    }
-
-    protected suspend fun <T : Any> sendRpcRequest(
-        topic: String,
-        key: String,
-        type: Class<T>,
-        obj: T?,
-        timeout: Duration = Duration.INFINITE,
-    ): BrokerMessage<T> {
-        TODO()
-    }
-
-    // TODO Rename this to something RPC-related
     protected suspend fun <T : Any> sendClusterRequest(
         topic: String,
         key: String,

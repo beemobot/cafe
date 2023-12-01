@@ -35,8 +35,9 @@ abstract class BrokerConnection {
     ): String
 
     abstract fun createHeaders(
-        targetClusters: Set<String>? = null,
-        requestId: String? = null
+        targetServices: Set<String> = emptySet(),
+        targetInstances: Set<String> = emptySet(),
+        inReplyTo: String? = null,
     ): BaseBrokerMessageHeaders
 
     open fun on(topic: String, cb: TopicListener) {

@@ -3,14 +3,15 @@ package gg.beemo.latte.broker
 import java.util.*
 
 open class BaseBrokerMessageHeaders(
-    val clientId: String,
-    val sourceCluster: String,
-    targetClusters: Set<String>?, // // Empty = No target restriction
-    requestId: String?,
+    val clientId: String?,
+    val sourceService: String,
+    val sourceInstance: String?,
+    val targetServices: Set<String>,
+    val targetInstances: Set<String>,
+    val inReplyTo: String? = null,
 ) {
 
-    val targetClusters: Set<String> = targetClusters ?: emptySet()
-    val requestId: String = requestId ?: UUID.randomUUID().toString()
+    val messageId = UUID.randomUUID().toString()
 
     companion object {
 

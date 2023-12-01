@@ -61,10 +61,11 @@ class TestBrokerClient(connection: BrokerConnection) : BrokerClient(connection) 
         //  This is something that needs to be adapted at the connection level as well.
         val response = greetingRpc.call(
             GreetingRequest(name),
-            service = BrokerServices.TEA,
-            instance = "0",
+            services = setOf(BrokerServices.TEA),
+            instances = setOf("0"),
+            timeout = 5.seconds,
         )
-        return response.name
+        return response.greeting
     }
 
     suspend fun enqueueRaidBan(user: RaidUser) {

@@ -8,9 +8,6 @@ data class BrokerMessage<T : Any>(
     val headers: BaseBrokerMessageHeaders
 ) {
 
-    val clusterId: String
-        get() = headers.sourceCluster
-
     suspend fun respond(data: T?) {
         client.respond(this, data)
     }
