@@ -24,7 +24,12 @@ export async function run<T>(
         }
 
         const secondsTillRetry = (retryEverySeconds * retries)
-        Logger.error(TAG, `Failed to complete ${taskName}. Retrying in ${secondsTillRetry} seconds.`, exception)
+        const logMessage = `Failed to complete ${taskName}. Retrying in ${secondsTillRetry} seconds.`
+        if (retries === 1) {
+            Logger.error(TAG, logMessage, exception)
+        } else {
+            Logger.error(TAG, logMessage)
+        }
 
         await new Promise((resolve) => setTimeout(resolve, secondsTillRetry * 1000))
         return run(taskName, action, retryEverySeconds, retries + 1)

@@ -7,7 +7,7 @@ import {TAG} from "../../constants/logging.js";
 import {
     RAID_MANAGEMENT_BATCH_INSERT_KEY,
     RAID_MANAGEMENT_CLIENT_TOPIC,
-    RAID_MANAGEMENT_CONCLUDE_RAID
+    RAID_MANAGEMENT_CONCLUDE_RAID, RAID_MANAGEMENT_CREATE_RAID
 } from "../../constants/raid_management_kafka.js";
 import {concludeRaid, createRaid, getRaidByInternalId} from "../../database/raid.js";
 import {RaidUser} from "@prisma/client";
@@ -16,8 +16,31 @@ import {insertRaidUsers} from "../../database/raid_users.js";
 export class RaidManagementClient extends BrokerClient<RaidManagementData> {
     constructor(conn: KafkaConnection) {
         super(conn, RAID_MANAGEMENT_CLIENT_TOPIC);
+        this.on(RAID_MANAGEMENT_CREATE_RAID, this.onCreateRaid)
         this.on(RAID_MANAGEMENT_BATCH_INSERT_KEY, this.onBatchInsertRaidUsers)
         this.on(RAID_MANAGEMENT_CONCLUDE_RAID, this.onConcludeRaid)
+    }
+
+    private async onCreateRaid(message: BrokerMessage<RaidManagementData>) {
+        if (message.value == null || message.value.request == null) {
+            Logger.warn(TAG, `Received a message on ${RAID_MANAGEMENT_CREATE_RAID} but no request details was found.`)
+            return
+        }
+
+        const request = message.value.request
+
+        let raid = await getRaidByInternalId(request.raidId)
+        if (raid == null) {
+            Logger.info(TAG, `Creating raid ${request.raidId} from guild ${request.guildId}.`)
+            raid = await run(
+                'create_raid',
+                async () => createRaid(request.raidId, request.guildId, null),
+                1,
+                12
+            )
+        }
+
+        await message.respond({ response: { publicId: raid?.public_id, acknowledged: true }, request: null })
     }
 
     private async onConcludeRaid(message: BrokerMessage<RaidManagementData>) {
@@ -45,10 +68,10 @@ export class RaidManagementClient extends BrokerClient<RaidManagementData> {
             'conclude_raid',
             async () => concludeRaid(raid!.public_id, raid!.id, conclusionDate),
             0.2,
-            25
+            12
         )
 
-        await message.respond({ response: { publicId: raid!.public_id }, request: null })
+        await message.respond({ response: { publicId: raid!.public_id, acknowledged: true }, request: null })
     }
     
     private async onBatchInsertRaidUsers(message: BrokerMessage<RaidManagementData>) {
@@ -58,18 +81,6 @@ export class RaidManagementClient extends BrokerClient<RaidManagementData> {
         }
 
         const request = message.value.request
-
-        let raid = await getRaidByInternalId(request.raidId)
-        if (raid == null) {
-            let conclusionDate = new Date(request.concludedAtMillis ?? Date.now())
-            Logger.info(TAG, `Creating raid ${request.raidId} from guild ${request.guildId}.`)
-            raid = await run(
-                'create_raid',
-                async () => createRaid(request.raidId, request.guildId, conclusionDate),
-                1,
-                25
-            )
-        }
 
         if (request.users.length > 0) {
             Logger.info(TAG, `Inserting ${request.users.length} users to the raid ${request.raidId}.`)
@@ -88,10 +99,10 @@ export class RaidManagementClient extends BrokerClient<RaidManagementData> {
                 'insert_raid_users',
                 async () => insertRaidUsers(users),
                 2,
-                25
+                12
             )
         }
 
-        await message.respond({ response: { publicId: raid!.public_id }, request: null })
+        await message.respond({ response: { publicId: null, acknowledged: true }, request: null })
     }
 }

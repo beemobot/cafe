@@ -7,6 +7,7 @@ accessible to third-parties, therefore, more than likely, this is of no-use for 
 - [`Client Specifications`](#client-specifications) talks about the different parts of the client.
   - [`overview`](#overview) summarizes some key points  of the client.
   - [`keys`](#keys)
+    - [`create-raid`](#create-raid) used to create a raid.
     - [`batch-insert-raid-users`](#batch-insert-raid-users) used to insert one or more bots detected; creates the Raid if it doesn't exist.
     - [`conclude-raid`](#conclude-raid) used to conclude an existing raid; if no date provided, uses current time.
   - [`schemas`](#schemas)
@@ -67,6 +68,22 @@ null as long as the `raidId` and `guildIdString` are not null.
 After processing the request, this endpoint should respond with a similar [`RaidManagementData`](#raid-management-data) but
 with the `response` property following the [`RaidManagementResponse`](#raid-management-response) schema.
 
+### Create Raid
+
+```yaml
+key: create-raid
+```
+
+This is a specific key, or endpoint, in the Kafka client where clients can create a new raid in the database. This should be  
+done at the start before the users are added, and should be awaited otherwise it will lead to a foreign key issue.
+
+This endpoint expects to receive a [`RaidManagementData`](#raid-management-data) with the `request` property
+following the [`RaidManagementRequest`](#raid-management-request) schema. Unlike [`batch-insert-raid-users`](#batch-insert-raid-users),  
+this doesn't expect the `users` property to not be empty as long as the `raidId` and `guildIdString` are not null.
+
+After processing the request, this endpoint should respond with a similar [`RaidManagementData`](#raid-management-data) but
+with the `response` property following the [`RaidManagementResponse`](#raid-management-response) schema.
+
 ## Schemas
 
 ### Raid Management Data
@@ -108,7 +125,8 @@ the nature of JavaScript not inherently supporting `int64` or `long` type.
 ### Raid Management Response
 ```json
 {
-  "externalId": "string"
+  "publicId": "nullable(string)",
+  "acknowledged": true
 }
 ```
 

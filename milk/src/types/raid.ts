@@ -11,7 +11,8 @@ export type RaidManagementRequest = {
 }
 
 export type RaidManagementResponse = {
-    publicId: string
+    publicId: string | null,
+    acknowledged: boolean
 }
 
 export type RaidManagementUser = {
