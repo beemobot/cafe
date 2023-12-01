@@ -59,6 +59,18 @@ export class RaidManagementClient extends BrokerClient<RaidManagementData> {
 
         const request = message.value.request
 
+        let raid = await getRaidByInternalId(request.raidId)
+        if (raid == null) {
+            let conclusionDate = new Date(request.concludedAtMillis ?? Date.now())
+            Logger.info(TAG, `Creating raid ${request.raidId} from guild ${request.guildId}.`)
+            raid = await run(
+                'create_raid',
+                async () => createRaid(request.raidId, request.guildId, conclusionDate),
+                1,
+                25
+            )
+        }
+
         if (request.users.length > 0) {
             Logger.info(TAG, `Inserting ${request.users.length} users to the raid ${request.raidId}.`)
             const users = request.users.map((user) =>  {
@@ -76,18 +88,6 @@ export class RaidManagementClient extends BrokerClient<RaidManagementData> {
                 'insert_raid_users',
                 async () => insertRaidUsers(users),
                 2,
-                25
-            )
-        }
-
-        let raid = await getRaidByInternalId(request.raidId)
-        if (raid == null) {
-            let conclusionDate = new Date(request.concludedAtMillis ?? Date.now())
-            Logger.info(TAG, `Creating raid ${request.raidId} from guild ${request.guildId}.`)
-            raid = await run(
-                'create_raid',
-                async () => createRaid(request.raidId, request.guildId, conclusionDate),
-                1,
                 25
             )
         }
