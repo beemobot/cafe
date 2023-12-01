@@ -6,7 +6,7 @@ import java.util.*
 import java.util.concurrent.CopyOnWriteArraySet
 
 fun interface TopicListener {
-    suspend fun onMessage(key: String, value: String, headers: BaseBrokerMessageHeaders)
+    suspend fun onMessage(topic: String, key: String, value: String, headers: BaseBrokerMessageHeaders)
 }
 
 abstract class BrokerConnection {
@@ -98,7 +98,7 @@ abstract class BrokerConnection {
             val listeners = topicListeners[topic]
             for (listener in listeners ?: return@launch) {
                 try {
-                    listener.onMessage(key, value, headers)
+                    listener.onMessage(topic, key, value, headers)
                 } catch (t: Throwable) {
                     log.error("Uncaught error in BrokerConnection listener", t)
                 }
