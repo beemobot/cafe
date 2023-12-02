@@ -5,20 +5,15 @@ import com.squareup.moshi.Moshi
 import gg.beemo.latte.logging.log
 import gg.beemo.latte.util.SuspendingCountDownLatch
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.util.Collections
-import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
-
-
-fun interface BrokerMessageListener<T : Any> {
-    suspend fun onMessage(clusterId: String, msg: BrokerMessage<T>)
-}
 
 
 sealed class BaseSubclient<RequestT : Any, ResponseT : Any>(
@@ -63,10 +58,10 @@ class ProducerSubclient<T : Any>(
         data: T,
         services: Set<String> = emptySet(),
         instances: Set<String> = emptySet(),
-    ) {
+    ): MessageId {
         val strigifiedData = stringifyOutgoing(data)
         val headers = connection.createHeaders(services, instances)
-        connection.send(topic, key, strigifiedData, headers)
+        return connection.send(topic, key, strigifiedData, headers)
     }
 
     private fun stringifyOutgoing(data: T?): String {
@@ -100,8 +95,10 @@ class ConsumerSubclient<T : Any>(
         headers: BaseBrokerMessageHeaders,
     ) = coroutineScope {
         val data = parseIncoming(value)
+        val message = BrokerMessage(client, topic, key, data, headers)
         // TODO Better nullability support - let the caller decide if nulls are allowed
-        callback(data!!)
+        // TODO Return the full BrokerMessage
+        callback(message.value!!)
     }
 
     private fun parseIncoming(json: String): T? {
@@ -111,22 +108,25 @@ class ConsumerSubclient<T : Any>(
 }
 
 class RpcClient<RequestT : Any, ResponseT : Any>(
-    private val connection: BrokerConnection,
     private val client: BrokerClient,
     private val topic: String,
     private val key: String,
-    private val requestType: Class<RequestT>,
+    requestType: Class<RequestT>,
     private val responseType: Class<ResponseT>,
     private val callback: suspend CoroutineScope.(RequestT) -> ResponseT,
 ) {
 
-    // TODO There are two producers, one for sending requests and one for sending responses.
-    //  The response producer will be dynamically created for each request?
-    private val requestProducer = client.producer<RequestT>(topic, key, requestType)
+    private val requestProducer = client.producer(topic, key, requestType)
 
-    // TODO Same for consumers. One will receive incoming requests, one will receive incoming responses after sending a request.
-    private val requestConsumer = client.consumer<RequestT>(topic, key, requestType) {
-        TODO()
+    private val requestConsumer = client.consumer(topic, key, requestType) {
+        val result = callback(it)
+        val responseProducer = client.producer(
+            client.createResponseTopic(topic),
+            client.createResponseKey(key),
+            responseType,
+        )
+        responseProducer.send(result) // TODO Send to source service/instance
+        responseProducer.destroy()
     }
 
     suspend fun call(
@@ -135,8 +135,7 @@ class RpcClient<RequestT : Any, ResponseT : Any>(
         instances: Set<String> = emptySet(),
         timeout: Duration = 10.seconds,
     ): ResponseT {
-        requestProducer.send(request, services, instances)
-        TODO()
+        return stream(request, services, instances, timeout, 1).single()
     }
 
     suspend fun stream(
@@ -145,15 +144,51 @@ class RpcClient<RequestT : Any, ResponseT : Any>(
         instances: Set<String> = emptySet(),
         timeout: Duration = 10.seconds,
         maxResponses: Int? = null,
-    ): Flow<ResponseT> = callbackFlow {
-        val responseConsumer = client.consumer<ResponseT>(topic, key, responseType) {
-            // TODO Cound max responses and timeout and stuff
-            send(it)
+    ): Flow<ResponseT> {
+        require(timeout.isFinite() || maxResponses != null) {
+            "Must specify either a timeout or a max number of responses"
         }
-        awaitClose {
-            responseConsumer.destroy()
+        if (maxResponses != null) {
+            require(maxResponses > 0) { "maxResponses must be at least 1" }
         }
-        TODO()
+        return callbackFlow {
+            val responseCounter = AtomicInteger(0)
+            val timeoutLatch = maxResponses?.let { SuspendingCountDownLatch(it) }
+            val messageId = AtomicReference<String?>(null)
+
+            val responseConsumer = client.consumer(
+                client.createResponseTopic(topic),
+                client.createResponseKey(key),
+                responseType,
+            ) {
+                // TODO great now I don't have access to the headers with the inReplyTo to validate it
+                send(it)
+                timeoutLatch?.countDown()
+                val count = responseCounter.incrementAndGet()
+                if (maxResponses != null && count >= maxResponses) {
+                    close()
+                }
+            }
+
+            messageId.set(requestProducer.send(request, services, instances))
+
+            invokeOnClose {
+                responseConsumer.destroy()
+            }
+
+            if (timeoutLatch != null) {
+                timeoutLatch.awaitThrowing(timeout)
+            } else {
+                delay(timeout)
+            }
+            close()
+        }
+
+    }
+
+    fun destroy() {
+        requestProducer.destroy()
+        requestConsumer.destroy()
     }
 
 }
@@ -223,17 +258,15 @@ abstract class BrokerClient(
         key: String,
         noinline callback: suspend CoroutineScope.(RequestT) -> ResponseT,
     ): RpcClient<RequestT, ResponseT> {
-        return RpcClient(connection, this, topic, key, RequestT::class.java, ResponseT::class.java, callback)
+        return RpcClient(this, topic, key, RequestT::class.java, ResponseT::class.java, callback)
     }
 
-    @PublishedApi
-    internal fun registerProducer(producer: ProducerSubclient<*>) {
+    private fun registerProducer(producer: ProducerSubclient<*>) {
         val metadata = getOrCreateKeyMetadata(producer.topic, producer.key)
         metadata.producers.add(producer)
     }
 
-    @PublishedApi
-    internal fun registerConsumer(consumer: ConsumerSubclient<*>) {
+    private fun registerConsumer(consumer: ConsumerSubclient<*>) {
         val metadata = getOrCreateKeyMetadata(consumer.topic, consumer.key)
         metadata.consumers.add(consumer)
     }
@@ -253,53 +286,6 @@ abstract class BrokerClient(
     internal fun createResponseKey(key: String): String = "$key.response"
 
     // ---------- Old code ----------
-
-    protected suspend fun <T : Any> sendClusterRequest(
-        topic: String,
-        key: String,
-        obj: T?,
-        timeout: Duration = Duration.INFINITE,
-        targetClusters: Set<String> = emptySet(),
-        expectedResponses: Int? = null,
-        messageCallback: BrokerMessageListener<T>? = null,
-    ): Pair<Map<String, BrokerMessage<T>>, Boolean> {
-        val responseKey = key.toResponseKey()
-
-        val responses = ConcurrentHashMap<String, BrokerMessage<T>>()
-        val latch = SuspendingCountDownLatch(expectedResponses ?: targetClusters.size)
-        val requestId: AtomicReference<String> = AtomicReference("")
-
-        val cb = BrokerEventListener { msg ->
-            coroutineScope {
-                if (msg.headers.requestId != requestId.get()) {
-                    return@coroutineScope
-                }
-                launch {
-                    try {
-                        messageCallback?.onMessage(msg.headers.sourceCluster, msg)
-                    } catch (t: Throwable) {
-                        log.error("Uncaught error in sendClusterRequest message callback", t)
-                    }
-                }
-                responses[msg.headers.sourceCluster] = msg
-                latch.countDown()
-            }
-        }
-
-        on(topic, responseKey, cb)
-        val timeoutReached: Boolean
-        try {
-            val headers = this.connection.createHeaders(targetClusters)
-            requestId.set(headers.requestId)
-            send(topic, key, obj, headers)
-
-            timeoutReached = !latch.await(timeout)
-        } finally {
-            off(topic, responseKey, cb)
-        }
-
-        return Pair(responses, timeoutReached)
-    }
 
     internal suspend fun <T : Any> respond(
         msg: BrokerMessage<T>,

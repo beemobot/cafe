@@ -9,6 +9,8 @@ fun interface TopicListener {
     suspend fun onMessage(topic: String, key: String, value: String, headers: BaseBrokerMessageHeaders)
 }
 
+typealias MessageId = String
+
 abstract class BrokerConnection {
 
     abstract val clientId: String
@@ -33,12 +35,12 @@ abstract class BrokerConnection {
         key: String,
         value: String,
         headers: BaseBrokerMessageHeaders,
-    ): String
+    ): MessageId
 
     internal abstract fun createHeaders(
         targetServices: Set<String> = emptySet(),
         targetInstances: Set<String> = emptySet(),
-        inReplyTo: String? = null,
+        inReplyTo: MessageId? = null,
     ): BaseBrokerMessageHeaders
 
     internal open fun on(topic: String, cb: TopicListener) {

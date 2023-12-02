@@ -2,6 +2,7 @@ package gg.beemo.latte.util
 
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.onSuccess
+import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.time.Duration
@@ -39,5 +40,13 @@ class SuspendingCountDownLatch(initialCount: Int) {
         }
         true
     } ?: false
+
+    suspend fun awaitThrowing(waitTime: Duration) = withTimeout(waitTime) {
+        try {
+            channel.receive()
+        } finally {
+            channel.close()
+        }
+    }
 
 }

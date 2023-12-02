@@ -2,6 +2,7 @@ package gg.beemo.latte.broker.kafka
 
 import gg.beemo.latte.broker.BaseBrokerMessageHeaders
 import gg.beemo.latte.broker.BrokerConnection
+import gg.beemo.latte.broker.MessageId
 import gg.beemo.latte.broker.TopicListener
 import gg.beemo.latte.logging.log
 import org.apache.kafka.clients.CommonClientConfigs
@@ -46,7 +47,7 @@ class KafkaConnection(
         key: String,
         value: String,
         headers: BaseBrokerMessageHeaders,
-    ): String {
+    ): MessageId {
         require(headers is KafkaMessageHeaders) {
             "KafkaConnection requires headers of type KafkaMessageHeaders to be passed, got ${headers.javaClass.name} instead"
         }
@@ -97,7 +98,7 @@ class KafkaConnection(
     override fun createHeaders(
         targetServices: Set<String>,
         targetInstances: Set<String>,
-        inReplyTo: String?,
+        inReplyTo: MessageId?,
     ): BaseBrokerMessageHeaders {
         return KafkaMessageHeaders(this.clientId, this.clusterId, targetClusters, requestId)
     }
