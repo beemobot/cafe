@@ -3,6 +3,8 @@ package gg.beemo.latte
 import gg.beemo.latte.broker.BrokerClient
 import gg.beemo.latte.broker.BrokerConnection
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.toList
 import kotlin.time.Duration.Companion.seconds
 
 // TODO This would be in the CommonConfig or similar.
@@ -52,6 +54,10 @@ class TestBrokerClient(connection: BrokerConnection) : BrokerClient(connection) 
         return@rpc GreetingResponse("Hello, ${req.name}")
     }
 
+    suspend fun enqueueRaidBan(user: RaidUser) {
+        raidBanQueue.send(user)
+    }
+
     suspend fun createGreeting(name: String): String {
         // TODO Have to specify what cluster to send to.
         //  Must also support external clusters such as milk... which aren't called clusters.
@@ -68,8 +74,9 @@ class TestBrokerClient(connection: BrokerConnection) : BrokerClient(connection) 
         return response.greeting
     }
 
-    suspend fun enqueueRaidBan(user: RaidUser) {
-        raidBanQueue.send(user)
+    suspend fun collectGreetings(name: String): List<String> {
+        val flow = greetingRpc.stream(GreetingRequest(name))
+        return flow.map { it.greeting }.toList()
     }
 
 }

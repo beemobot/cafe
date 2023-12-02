@@ -32,6 +32,7 @@ class KafkaConnection(
     private val useTls: Boolean = false,
 ) : BrokerConnection() {
 
+    override val supportsTopicHotSwap = false
     private val kafkaHostsString = kafkaHosts.joinToString(",")
 
     private var producer: KafkaProducer<String, String>? = null
@@ -93,7 +94,11 @@ class KafkaConnection(
         producer = null
     }
 
-    override fun createHeaders(targetClusters: Set<String>?, requestId: String?): BaseBrokerMessageHeaders {
+    override fun createHeaders(
+        targetServices: Set<String>,
+        targetInstances: Set<String>,
+        inReplyTo: String?,
+    ): BaseBrokerMessageHeaders {
         return KafkaMessageHeaders(this.clientId, this.clusterId, targetClusters, requestId)
     }
 

@@ -13,6 +13,7 @@ abstract class BrokerConnection {
 
     abstract val clientId: String
     abstract val clusterId: String
+    abstract val supportsTopicHotSwap: Boolean
 
     protected val topicListeners: MutableMap<String, MutableSet<TopicListener>> = Collections.synchronizedMap(HashMap())
 
@@ -27,24 +28,24 @@ abstract class BrokerConnection {
         eventDispatcherScope.cancel()
     }
 
-    abstract suspend fun send(
+    internal abstract suspend fun send(
         topic: String,
         key: String,
         value: String,
         headers: BaseBrokerMessageHeaders,
     ): String
 
-    abstract fun createHeaders(
+    internal abstract fun createHeaders(
         targetServices: Set<String> = emptySet(),
         targetInstances: Set<String> = emptySet(),
         inReplyTo: String? = null,
     ): BaseBrokerMessageHeaders
 
-    open fun on(topic: String, cb: TopicListener) {
+    internal open fun on(topic: String, cb: TopicListener) {
         topicListeners.computeIfAbsent(topic) { CopyOnWriteArraySet() }.add(cb)
     }
 
-    open fun off(topic: String, cb: TopicListener) {
+    internal open fun off(topic: String, cb: TopicListener) {
         topicListeners.computeIfPresent(topic) { _, listeners ->
             listeners.remove(cb)
             if (listeners.size == 0) {

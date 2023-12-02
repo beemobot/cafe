@@ -5,35 +5,30 @@ import com.squareup.moshi.Moshi
 import gg.beemo.latte.logging.log
 import gg.beemo.latte.util.SuspendingCountDownLatch
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
-fun interface BrokerEventListener<T : Any> {
-    suspend fun onMessage(msg: BrokerMessage<T>)
-}
 
 fun interface BrokerMessageListener<T : Any> {
     suspend fun onMessage(clusterId: String, msg: BrokerMessage<T>)
 }
 
 
-sealed class BaseClient<OutgoingT : Any, IncomingT : Any>(
+sealed class BaseSubclient<RequestT : Any, ResponseT : Any>(
     protected val connection: BrokerConnection,
     protected val client: BrokerClient,
     val topic: String,
     val key: String,
-    protected val outgoingType: Class<OutgoingT>?,
-    protected val incomingType: Class<IncomingT>?,
-    callback: (suspend CoroutineScope.(IncomingT) -> OutgoingT)?,
 ) {
 
-    // TODO Should this class still exist?
+    internal abstract fun destroy()
 
     companion object {
         // TODO Investigate if it's a good idea to add a global custom type adapter
@@ -45,27 +40,27 @@ sealed class BaseClient<OutgoingT : Any, IncomingT : Any>(
 
 }
 
-
-class ProducerClient<OutgoingT : Any>(
+class ProducerSubclient<T : Any>(
     connection: BrokerConnection,
     client: BrokerClient,
     topic: String,
     key: String,
-    outgoingType: Class<OutgoingT>,
-) : BaseClient<OutgoingT, Unit>(
+    requestType: Class<T>,
+) : BaseSubclient<T, Unit>(
     connection,
     client,
     topic,
     key,
-    outgoingType,
-    null,
-    null,
 ) {
 
-    private val adapter: JsonAdapter<OutgoingT?> = moshi.adapter(outgoingType).nullSafe()
+    private val adapter: JsonAdapter<T?> = moshi.adapter(requestType).nullSafe()
+
+    override fun destroy() {
+        TODO()
+    }
 
     suspend fun send(
-        data: OutgoingT,
+        data: T,
         services: Set<String> = emptySet(),
         instances: Set<String> = emptySet(),
     ) {
@@ -74,77 +69,105 @@ class ProducerClient<OutgoingT : Any>(
         connection.send(topic, key, strigifiedData, headers)
     }
 
-    private fun stringifyOutgoing(data: OutgoingT?): String {
+    private fun stringifyOutgoing(data: T?): String {
         return adapter.toJson(data)
     }
 
 }
 
-class ConsumerClient<IncomingT : Any>(
+class ConsumerSubclient<T : Any>(
     connection: BrokerConnection,
     client: BrokerClient,
     topic: String,
     key: String,
-    incomingType: Class<IncomingT>,
-    callback: suspend CoroutineScope.(IncomingT) -> Unit,
-) : BaseClient<Unit, IncomingT>(
+    incomingType: Class<T>,
+    private val callback: suspend CoroutineScope.(T) -> Unit,
+) : BaseSubclient<Unit, T>(
     connection,
     client,
     topic,
     key,
-    null,
-    incomingType,
-    callback,
 ) {
 
-    private val adapter: JsonAdapter<IncomingT?> = moshi.adapter(incomingType).nullSafe()
+    private val adapter: JsonAdapter<T?> = moshi.adapter(incomingType).nullSafe()
 
-    private fun parseIncoming(json: String): IncomingT? {
+    override fun destroy() {
+        TODO()
+    }
+
+    internal suspend fun onIncomingMessage(
+        value: String,
+        headers: BaseBrokerMessageHeaders,
+    ) = coroutineScope {
+        val data = parseIncoming(value)
+        // TODO Better nullability support - let the caller decide if nulls are allowed
+        callback(data!!)
+    }
+
+    private fun parseIncoming(json: String): T? {
         return adapter.fromJson(json)
     }
 
 }
 
-
-class RpcClient<OutgoingT : Any, IncomingT : Any>(
-    connection: BrokerConnection,
-    client: BrokerClient,
-    topic: String,
-    key: String,
-    outgoingType: Class<OutgoingT>,
-    incomingType: Class<IncomingT>,
-    callback: suspend CoroutineScope.(IncomingT) -> OutgoingT,
-) : BaseClient<OutgoingT, IncomingT>(
-    connection,
-    client,
-    topic,
-    key,
-    outgoingType,
-    incomingType,
-    callback,
+class RpcClient<RequestT : Any, ResponseT : Any>(
+    private val connection: BrokerConnection,
+    private val client: BrokerClient,
+    private val topic: String,
+    private val key: String,
+    private val requestType: Class<RequestT>,
+    private val responseType: Class<ResponseT>,
+    private val callback: suspend CoroutineScope.(RequestT) -> ResponseT,
 ) {
 
-    private val producer = ProducerClient(connection, client, topic, key, outgoingType)
-    private val consumer = ConsumerClient(connection, client, topic, key, incomingType) {
+    // TODO There are two producers, one for sending requests and one for sending responses.
+    //  The response producer will be dynamically created for each request?
+    private val requestProducer = client.producer<RequestT>(topic, key, requestType)
+
+    // TODO Same for consumers. One will receive incoming requests, one will receive incoming responses after sending a request.
+    private val requestConsumer = client.consumer<RequestT>(topic, key, requestType) {
         TODO()
     }
 
     suspend fun call(
-        request: OutgoingT,
+        request: RequestT,
         services: Set<String> = emptySet(),
         instances: Set<String> = emptySet(),
         timeout: Duration = 10.seconds,
-    ): IncomingT {
-        producer.send(request, services, instances)
+    ): ResponseT {
+        requestProducer.send(request, services, instances)
+        TODO()
+    }
+
+    suspend fun stream(
+        request: RequestT,
+        services: Set<String> = emptySet(),
+        instances: Set<String> = emptySet(),
+        timeout: Duration = 10.seconds,
+        maxResponses: Int? = null,
+    ): Flow<ResponseT> = callbackFlow {
+        val responseConsumer = client.consumer<ResponseT>(topic, key, responseType) {
+            // TODO Cound max responses and timeout and stuff
+            send(it)
+        }
+        awaitClose {
+            responseConsumer.destroy()
+        }
         TODO()
     }
 
 }
 
-
 private class TopicMetadata(
     val topic: String,
-    val keys: MutableMap<String, TopicKeyClient<out Any>>
+    val keys: MutableMap<String, KeyMetadata>
+)
+
+private class KeyMetadata(
+    val topic: String,
+    val key: String,
+    val producers: MutableSet<ProducerSubclient<*>>,
+    val consumers: MutableSet<ConsumerSubclient<*>>,
 )
 
 abstract class BrokerClient(
@@ -152,44 +175,84 @@ abstract class BrokerClient(
     internal val connection: BrokerConnection,
 ) {
 
-    inline fun <reified T : Any> consumer(
-        topic: String,
-        key: String,
-        noinline callback: suspend CoroutineScope.(T) -> Unit,
-    ): ConsumerClient<T> {
-        return ConsumerClient(connection, this, topic, key, T::class.java, callback)
-    }
-
-    inline fun <reified T : Any> producer(
-        topic: String,
-        key: String,
-    ): ProducerClient<T> {
-        return ProducerClient(connection, this, topic, key, T::class.java)
-    }
-
-    inline fun <reified IncomingT : Any, reified OutgoingT : Any> rpc(
-        topic: String,
-        key: String,
-        noinline callback: suspend CoroutineScope.(IncomingT) -> OutgoingT,
-    ): RpcClient<IncomingT, OutgoingT> {
-        return RpcClient(connection, this, topic, key, IncomingT::class.java, OutgoingT::class.java, callback)
-    }
-
-    internal suspend fun send(
-        topic: String,
-        key: String,
-        data: String,
-        headers: BaseBrokerMessageHeaders = this.connection.createHeaders(),
-    ): String {
-        return connection.send(topic, key, data, headers)
-    }
-
     private val topics: MutableMap<String, TopicMetadata> = Collections.synchronizedMap(HashMap())
 
     init {
         log.debug("Initializing Broker Client with topics '{}' for objects of type {}", topics, type.name)
         connection.on(topics, ::onTopicMessage)
     }
+
+    inline fun <reified T : Any> consumer(
+        topic: String,
+        key: String,
+        noinline callback: suspend CoroutineScope.(T) -> Unit,
+    ): ConsumerSubclient<T> {
+        return consumer(topic, key, T::class.java, callback)
+    }
+
+    fun <T : Any> consumer(
+        topic: String,
+        key: String,
+        type: Class<T>,
+        callback: suspend CoroutineScope.(T) -> Unit,
+    ): ConsumerSubclient<T> {
+        return ConsumerSubclient(connection, this, topic, key, type, callback).also {
+            registerConsumer(it)
+        }
+    }
+
+    inline fun <reified T : Any> producer(
+        topic: String,
+        key: String,
+    ): ProducerSubclient<T> {
+        return producer(topic, key, T::class.java)
+    }
+
+    fun <T : Any> producer(
+        topic: String,
+        key: String,
+        type: Class<T>,
+    ): ProducerSubclient<T> {
+        return ProducerSubclient(connection, this, topic, key, type).also {
+            registerProducer(it)
+        }
+    }
+
+    inline fun <reified RequestT : Any, reified ResponseT : Any> rpc(
+        topic: String,
+        key: String,
+        noinline callback: suspend CoroutineScope.(RequestT) -> ResponseT,
+    ): RpcClient<RequestT, ResponseT> {
+        return RpcClient(connection, this, topic, key, RequestT::class.java, ResponseT::class.java, callback)
+    }
+
+    @PublishedApi
+    internal fun registerProducer(producer: ProducerSubclient<*>) {
+        val metadata = getOrCreateKeyMetadata(producer.topic, producer.key)
+        metadata.producers.add(producer)
+    }
+
+    @PublishedApi
+    internal fun registerConsumer(consumer: ConsumerSubclient<*>) {
+        val metadata = getOrCreateKeyMetadata(consumer.topic, consumer.key)
+        metadata.consumers.add(consumer)
+    }
+
+    private fun getOrCreateKeyMetadata(topic: String, key: String): KeyMetadata {
+        val topicData = topics.computeIfAbsent(topic) {
+            // TODO Tell connection to create the topic, if applicable
+            TopicMetadata(topic, Collections.synchronizedMap(HashMap()))
+        }
+        val keyData = topicData.keys.computeIfAbsent(key) {
+            KeyMetadata(topic, key, Collections.synchronizedSet(HashSet()), Collections.synchronizedSet(HashSet()))
+        }
+        return keyData
+    }
+
+    internal fun createResponseTopic(topic: String): String = "$topic.responses"
+    internal fun createResponseKey(key: String): String = "$key.response"
+
+    // ---------- Old code ----------
 
     protected suspend fun <T : Any> sendClusterRequest(
         topic: String,
@@ -238,18 +301,6 @@ abstract class BrokerClient(
         return Pair(responses, timeoutReached)
     }
 
-    protected inline fun <reified T : Any> on(topic: String, key: String, cb: BrokerEventListener<T>) {
-        on(topic, key, T::class.java, cb)
-    }
-
-    protected fun <T : Any> on(topic: String, key: String, type: Class<T>, cb: BrokerEventListener<T>) {
-        getTopicKeyMetadata(topic, key, type).listeners.add(cb)
-    }
-
-    protected fun <T : Any> off(topic: String, key: String, cb: BrokerEventListener<T>) {
-        getTopicKeyMetadata<T>(topic, key)?.listeners?.remove(cb)
-    }
-
     internal suspend fun <T : Any> respond(
         msg: BrokerMessage<T>,
         data: T?,
@@ -272,7 +323,7 @@ abstract class BrokerClient(
         value: String,
         headers: BaseBrokerMessageHeaders,
     ) = coroutineScope {
-        val metadata = getTopicKeyMetadata<T>(topic, key)
+        val metadata = getOrCreateKeyMetadata<T>(topic, key)
         requireNotNull(metadata) { "Can't find metadata for key '$key' in topic '$topic'" }
         val obj = metadata.parse(value)
         val msg = BrokerMessage(this@BrokerClient, topic, key, obj, headers)
@@ -287,27 +338,4 @@ abstract class BrokerClient(
         }
     }
 
-    private fun <T : Any> getTopicKeyMetadata(topic: String, key: String): TopicKeyClient<T>? {
-        val topicData = topics[topic] ?: return null
-        return topicData.keys[key]
-    }
-
-    private fun <T : Any> getTopicKeyMetadata(topic: String, key: String, type: Class<T>): TopicKeyClient<T> {
-        val topicData = topics.computeIfAbsent(topic) {
-            TopicMetadata(topic, Collections.synchronizedMap(HashMap()))
-        }
-        val keyData = topicData.keys.computeIfAbsent(key) {
-            val adapter = moshi.adapter(type).nullSafe()
-            TopicKeyClient(topic, key, type, adapter, CopyOnWriteArrayList())
-        }
-        require(keyData.type == type) {
-            "Key '$key' in topic '$topic' is already registered with type ${keyData.type.name}, " +
-                    "attempting to process it with type ${type.name} instead"
-        }
-        @Suppress("UNCHECKED_CAST") // Safe because of the above verification
-        return keyData as TopicKeyClient<T>
-    }
-
 }
-
-internal fun String.toResponseKey(): String = "${this}-response"
