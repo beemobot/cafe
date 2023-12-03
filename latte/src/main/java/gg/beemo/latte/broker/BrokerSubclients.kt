@@ -3,6 +3,7 @@ package gg.beemo.latte.broker
 import com.squareup.moshi.JsonAdapter
 import com.squareup.moshi.Moshi
 import gg.beemo.latte.util.MoshiInstantAdapter
+import gg.beemo.latte.util.MoshiUnitAdapter
 import gg.beemo.latte.util.SuspendingCountDownLatch
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.coroutineScope
@@ -30,6 +31,7 @@ sealed class BaseSubclient(
         //  https://github.com/square/moshi#custom-type-adapters
         @JvmStatic
         protected val moshi: Moshi = Moshi.Builder()
+            .add(MoshiUnitAdapter())
             .add(MoshiInstantAdapter())
             .build()
     }

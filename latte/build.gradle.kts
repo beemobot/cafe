@@ -26,6 +26,11 @@ dependencies {
     implementation("org.jetbrains:annotations:24.1.0")
     compileOnly("org.apache.logging.log4j:log4j-api:2.22.0")
 
+    // JUnit testing framework
+    val junitVersion = "5.10.1"
+    testImplementation("org.junit.jupiter:junit-jupiter-api:$junitVersion")
+    testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:$junitVersion")
+
 }
 
 repositories {
@@ -34,6 +39,10 @@ repositories {
 
 kotlin {
     jvmToolchain(17)
+}
+
+tasks.test {
+    useJUnitPlatform()
 }
 
 defaultTasks("build")
