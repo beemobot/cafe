@@ -3,8 +3,9 @@ package gg.beemo.latte.broker.kafka
 import gg.beemo.latte.broker.BaseBrokerMessageHeaders
 import gg.beemo.latte.broker.BrokerConnection
 import gg.beemo.latte.broker.MessageId
-import gg.beemo.latte.broker.TopicListener
 import gg.beemo.latte.logging.log
+import kotlinx.coroutines.future.await
+import kotlinx.coroutines.runBlocking
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin.AdminClient
 import org.apache.kafka.clients.admin.NewTopic
@@ -27,10 +28,11 @@ import java.util.*
 
 class KafkaConnection(
     kafkaHosts: Array<String>,
-    override val clientId: String,
-    private val instanceId: String,
-    override val clusterId: String,
+    override val serviceName: String,
+    override val instanceId: String,
     private val useTls: Boolean = false,
+    private val partitionCount: Int = 1,
+    private val replicationFactor: Short = 1,
 ) : BrokerConnection() {
 
     override val supportsTopicHotSwap = false
@@ -65,9 +67,9 @@ class KafkaConnection(
                     log.error("Error enqueueing Kafka message", ex)
                 } else {
                     log.trace(
-                        "Enqueued message with key {} as request id {} into topic {} at offset {}",
+                        "Enqueued message {} with key {} into topic {} at offset {}",
+                        headers.messageId,
                         key,
-                        headers.requestId,
                         metadata.topic(),
                         metadata.offset(),
                     )
@@ -75,10 +77,10 @@ class KafkaConnection(
             }
         }
 
-        return headers.requestId
+        return headers.messageId
     }
 
-    override fun start() {
+    override suspend fun start() {
         check(!isRunning) { "KafkaConnection is already running!" }
         log.debug("Starting Kafka Connection")
         createTopics()
@@ -88,11 +90,11 @@ class KafkaConnection(
     }
 
     override fun destroy() {
-        super.destroy()
         consumer?.close()
         consumer = null
         producer?.close()
         producer = null
+        super.destroy()
     }
 
     override fun createHeaders(
@@ -100,21 +102,27 @@ class KafkaConnection(
         targetInstances: Set<String>,
         inReplyTo: MessageId?,
     ): BaseBrokerMessageHeaders {
-        return KafkaMessageHeaders(this.clientId, this.clusterId, targetClusters, requestId)
+        return KafkaMessageHeaders(serviceName, instanceId, targetServices, targetInstances, inReplyTo, null)
     }
 
-    override fun on(topic: String, cb: TopicListener) {
+    override fun createTopic(topic: String) {
+        checkRunningTopicsModification(topic)
+    }
+
+    override fun removeTopic(topic: String) {
+        checkRunningTopicsModification(topic)
+    }
+
+    private fun checkRunningTopicsModification(topic: String) {
         if (!topicListeners.containsKey(topic) && isRunning) {
             // NOTE: It might be possible to recreate and reconnect the stream with new topics,
             //       but at this point it's not worth the effort, given this kind of dynamic topic
             //       addition doesn't happen in practice.
             throw IllegalStateException("Cannot subscribe to new topic after KafkaConnection has started")
         }
-        super.on(topic, cb)
     }
 
-    @Synchronized
-    private fun createTopics() {
+    private suspend fun createTopics() {
         val listeningTopics = topicListeners.keys
         log.debug("Creating missing topics, target topics: {}", listeningTopics)
         val props = createConnectionProperties()
@@ -125,9 +133,8 @@ class KafkaConnection(
         log.debug("Missing topics: {}", missingTopics)
         if (missingTopics.isNotEmpty()) {
             client.createTopics(
-                // TODO: Figure out how to set replication factor and partition count
-                missingTopics.map { NewTopic(it, 1, 1) }
-            ).all().get()
+                missingTopics.map { NewTopic(it, partitionCount, replicationFactor) }
+            ).all().toCompletionStage().await()
         }
         log.debug("Created all missing topics")
     }
@@ -192,7 +199,9 @@ class KafkaConnection(
                 if (ex is MissingSourceTopicException) {
                     log.info("Got MissingSourceTopicException in Consumer, trying to re-create missing topics")
                     try {
-                        createTopics()
+                        runBlocking {
+                            createTopics()
+                        }
                     } catch (t: Exception) {
                         log.error(
                             "Error in KafkaStreams: Got MissingSourceTopicException but couldn't re-create topics",
@@ -223,7 +232,7 @@ class KafkaConnection(
 
     private fun handleIncomingRecord(topic: String, record: Record<String, String>) {
         val headers = KafkaMessageHeaders(record.headers())
-        handleIncomingMessage(topic, record.key(), record.value(), headers)
+        dispatchIncomingMessage(topic, record.key(), record.value(), headers)
     }
 
 }

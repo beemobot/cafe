@@ -6,10 +6,4 @@ data class BrokerMessage<T : Any>(
     val key: String,
     val value: T?,
     val headers: BaseBrokerMessageHeaders
-) {
-
-    suspend fun respond(data: T?) {
-        client.respond(this, data)
-    }
-
-}
+)

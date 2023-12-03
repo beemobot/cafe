@@ -2,7 +2,12 @@ package gg.beemo.latte
 
 object CommonConfig {
 
-    const val INVALID_CLUSTER_ID = Integer.MIN_VALUE.toString()
-    const val VANILLA_CLUSTER_ID = "-1"
+    object BrokerServices {
+        const val TEA = "tea" // Bot
+        const val VANILLA = "vanilla" // Bot cluster coordinator
+        const val MILK = "milk" // Raid logs
+        const val SUGAR = "sugar" // Premium management
+        const val COFFEE = "coffee" // Raid bans
+    }
 
 }

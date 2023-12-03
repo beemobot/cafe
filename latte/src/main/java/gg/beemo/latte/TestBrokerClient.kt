@@ -7,11 +7,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.toList
 import kotlin.time.Duration.Companion.seconds
 
-// TODO This would be in the CommonConfig or similar.
-object BrokerServices {
-    const val TEA = "tea"
-}
-
 class Tea {
     companion object {
         val cluster: Cluster = Cluster()
@@ -67,7 +62,7 @@ class TestBrokerClient(connection: BrokerConnection) : BrokerClient(connection) 
         //  This is something that needs to be adapted at the connection level as well.
         val response = greetingRpc.call(
             GreetingRequest(name),
-            services = setOf(BrokerServices.TEA),
+            services = setOf(CommonConfig.BrokerServices.TEA),
             instances = setOf("0"),
             timeout = 5.seconds,
         )

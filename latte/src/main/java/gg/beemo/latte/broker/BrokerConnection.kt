@@ -1,33 +1,25 @@
 package gg.beemo.latte.broker
 
 import gg.beemo.latte.logging.log
-import kotlinx.coroutines.*
 import java.util.*
-import java.util.concurrent.CopyOnWriteArraySet
 
 fun interface TopicListener {
-    suspend fun onMessage(topic: String, key: String, value: String, headers: BaseBrokerMessageHeaders)
+    fun onMessage(topic: String, key: String, value: String, headers: BaseBrokerMessageHeaders)
 }
 
 typealias MessageId = String
 
 abstract class BrokerConnection {
 
-    abstract val clientId: String
-    abstract val clusterId: String
+    abstract val serviceName: String
+    abstract val instanceId: String
     abstract val supportsTopicHotSwap: Boolean
 
     protected val topicListeners: MutableMap<String, MutableSet<TopicListener>> = Collections.synchronizedMap(HashMap())
 
-    private val eventDispatcherScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
-    private val eventDispatcherErrorHandler = CoroutineExceptionHandler { _, t ->
-        log.error("Uncaught error in BrokerConnection event handler", t)
-    }
-
-    abstract fun start()
+    abstract suspend fun start()
     open fun destroy() {
         topicListeners.clear()
-        eventDispatcherScope.cancel()
     }
 
     internal abstract suspend fun send(
@@ -43,19 +35,49 @@ abstract class BrokerConnection {
         inReplyTo: MessageId? = null,
     ): BaseBrokerMessageHeaders
 
-    internal open fun on(topic: String, cb: TopicListener) {
-        topicListeners.computeIfAbsent(topic) { CopyOnWriteArraySet() }.add(cb)
+    protected abstract fun createTopic(topic: String)
+    protected abstract fun removeTopic(topic: String)
+
+    internal fun on(topic: String, cb: TopicListener) {
+        topicListeners.computeIfAbsent(topic) {
+            createTopic(topic)
+            Collections.synchronizedSet(HashSet())
+        }.add(cb)
     }
 
-    internal open fun off(topic: String, cb: TopicListener) {
+    internal fun off(topic: String, cb: TopicListener) {
         topicListeners.computeIfPresent(topic) { _, listeners ->
             listeners.remove(cb)
             if (listeners.size == 0) {
+                removeTopic(topic)
                 null
             } else {
                 listeners
             }
         }
+    }
+
+    // To be called by implementers
+    protected fun dispatchIncomingMessage(
+        topic: String,
+        key: String,
+        value: String,
+        headers: BaseBrokerMessageHeaders
+    ) {
+        if (
+            (headers.targetServices.isNotEmpty() && serviceName !in headers.targetServices) ||
+            (headers.targetInstances.isNotEmpty() && instanceId !in headers.targetInstances)
+        ) {
+            // If there is a target cluster restriction and this message wasn't meant for us,
+            // discard it immediately without notifying any listeners.
+            return
+        }
+        if (headers.sourceInstance == instanceId && headers.sourceService == serviceName) {
+            // If this message was sent by ourselves, discard it too, as we already dispatch events
+            // to our listeners in `send()` to avoid the round trip through an external service.
+            return
+        }
+        invokeLocalCallbacks(topic, key, value, headers)
     }
 
     protected fun shouldDispatchExternallyAfterShortCircuit(
@@ -64,48 +86,36 @@ abstract class BrokerConnection {
         value: String,
         headers: BaseBrokerMessageHeaders
     ): Boolean {
-        val targets = headers.targetClusters
-        val isLocalClusterInTargets = clusterId in targets
+        val targetServices = headers.targetServices
+        val targetInstances = headers.targetInstances
+        val isThisConnectionTargeted =
+            (targetServices.isEmpty() || serviceName in targetServices) &&
+                    (targetInstances.isEmpty() || instanceId in targetInstances)
 
         // If the message is meant for ourselves (amongst other clusters),
         // immediately dispatch it to the listeners.
-        if (targets.isEmpty() || isLocalClusterInTargets) {
-            invokeCallbacks(topic, key, value, headers)
+        if (isThisConnectionTargeted) {
+            invokeLocalCallbacks(topic, key, value, headers)
         }
 
-        val isLocalClusterTheOnlyTarget = targets.size == 1 && isLocalClusterInTargets
         // Return whether implementers should dispatch this message to external services
-        return targets.isEmpty() || !isLocalClusterTheOnlyTarget
+        return (
+                // For all services/instances
+                targetServices.isEmpty() || targetInstances.isEmpty() ||
+                        // Not for us, so it must be for somebody else
+                        !isThisConnectionTargeted ||
+                        // For us, so check if it is also for someone else
+                        targetServices.size > 1 || targetInstances.size > 1
+                )
     }
 
-    protected fun handleIncomingMessage(
-        topic: String,
-        key: String,
-        value: String,
-        headers: BaseBrokerMessageHeaders
-    ) {
-        if (headers.targetClusters.isNotEmpty() && clusterId !in headers.targetClusters) {
-            // If there is a target cluster restriction and this message wasn't meant for us,
-            // discard it immediately without notifying any listeners.
-            return
-        }
-        if (headers.sourceCluster == clusterId) {
-            // If this message was sent by ourselves, discard it too, as we already dispatch events
-            // to our listeners in `send()` to avoid the round trip through an external service.
-            return
-        }
-        invokeCallbacks(topic, key, value, headers)
-    }
-
-    private fun invokeCallbacks(topic: String, key: String, value: String, headers: BaseBrokerMessageHeaders) {
-        eventDispatcherScope.launch(eventDispatcherErrorHandler) {
-            val listeners = topicListeners[topic]
-            for (listener in listeners ?: return@launch) {
-                try {
-                    listener.onMessage(topic, key, value, headers)
-                } catch (t: Throwable) {
-                    log.error("Uncaught error in BrokerConnection listener", t)
-                }
+    private fun invokeLocalCallbacks(topic: String, key: String, value: String, headers: BaseBrokerMessageHeaders) {
+        val listeners = topicListeners[topic] ?: return
+        for (listener in listeners) {
+            try {
+                listener.onMessage(topic, key, value, headers)
+            } catch (e: Exception) {
+                log.error("Uncaught error in BrokerConnection listener for key '$key' in topic '$topic'", e)
             }
         }
     }
