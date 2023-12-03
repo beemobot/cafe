@@ -7,11 +7,11 @@ open class BaseBrokerMessageHeaders(
     val sourceInstance: String,
     val targetServices: Set<String>,
     val targetInstances: Set<String>,
-    val inReplyTo: String?,
-    messageId: String?,
+    val inReplyTo: MessageId?,
+    messageId: MessageId?,
 ) {
 
-    val messageId: String = messageId ?: UUID.randomUUID().toString()
+    val messageId: MessageId = messageId ?: UUID.randomUUID().toString()
 
     companion object {
 

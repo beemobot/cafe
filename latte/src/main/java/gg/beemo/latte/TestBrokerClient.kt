@@ -2,6 +2,7 @@ package gg.beemo.latte
 
 import gg.beemo.latte.broker.BrokerClient
 import gg.beemo.latte.broker.BrokerConnection
+import gg.beemo.latte.broker.BrokerMessage
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.toList
@@ -31,8 +32,8 @@ class TestBrokerClient(connection: BrokerConnection) : BrokerClient(connection) 
         consumer<ShardRestartRequest>(
             topic = "cluster.shard",
             key = "restart",
-        ) { req: ShardRestartRequest ->
-            Tea.cluster.restartShard(req.shardId)
+        ) {
+            Tea.cluster.restartShard(it.value.shardId)
         }
     }
 
@@ -44,34 +45,46 @@ class TestBrokerClient(connection: BrokerConnection) : BrokerClient(connection) 
     private val greetingRpc = rpc<GreetingRequest, GreetingResponse>(
         topic = "rpc.greetings",
         key = "greeting.requests",
-    ) { req: GreetingRequest ->
+    ) {
         delay(2.seconds)
-        return@rpc GreetingResponse("Hello, ${req.name}")
+        return@rpc GreetingResponse("Hello, ${it.value.name}")
+    }
+
+    private val nullRpc = rpc<Unit?, Unit?>(
+        topic = "null",
+        key = "null",
+    ) {
+        if (it.value != null) {
+            throw IllegalStateException("nullRpc received non-null")
+        }
+        return@rpc null
     }
 
     suspend fun enqueueRaidBan(user: RaidUser) {
         raidBanQueue.send(user)
     }
 
+    suspend fun sendNull() {
+        val definitelyNull = nullRpc.call(null)
+        val value = definitelyNull.value
+        if (value != null) {
+            throw IllegalStateException("nullRpc returned non-null")
+        }
+    }
+
     suspend fun createGreeting(name: String): String {
-        // TODO Have to specify what cluster to send to.
-        //  Must also support external clusters such as milk... which aren't called clusters.
-        //  Maybe I should rename it to "service", so you specify the "target service".
-        //  Perhaps also the "target instance"? Because Tea as a whole would be a service.
-        //  So for a cluster-specific request, you send to service=tea, instance=0.
-        //  This is something that needs to be adapted at the connection level as well.
         val response = greetingRpc.call(
             GreetingRequest(name),
             services = setOf(CommonConfig.BrokerServices.TEA),
             instances = setOf("0"),
             timeout = 5.seconds,
         )
-        return response.greeting
+        return response.value.greeting
     }
 
     suspend fun collectGreetings(name: String): List<String> {
         val flow = greetingRpc.stream(GreetingRequest(name))
-        return flow.map { it.greeting }.toList()
+        return flow.map { it.value.greeting }.toList()
     }
 
 }

@@ -2,7 +2,6 @@ package gg.beemo.latte.broker
 
 import gg.beemo.latte.logging.log
 import kotlinx.coroutines.*
-import kotlinx.coroutines.flow.*
 import java.util.Collections
 
 private class TopicMetadata(
@@ -26,48 +25,59 @@ abstract class BrokerClient(
     private val consumerScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     private val topics: MutableMap<String, TopicMetadata> = Collections.synchronizedMap(HashMap())
 
-    inline fun <reified T : Any> consumer(
+    inline fun <reified T> consumer(
         topic: String,
         key: String,
-        noinline callback: suspend CoroutineScope.(T) -> Unit,
+        noinline callback: suspend CoroutineScope.(BrokerMessage<T>) -> Unit,
     ): ConsumerSubclient<T> {
-        return consumer(topic, key, T::class.java, callback)
+        return consumer(topic, key, T::class.java, null is T, callback)
     }
 
-    fun <T : Any> consumer(
+    fun <T> consumer(
         topic: String,
         key: String,
         type: Class<T>,
-        callback: suspend CoroutineScope.(T) -> Unit,
+        isNullable: Boolean,
+        callback: suspend CoroutineScope.(BrokerMessage<T>) -> Unit,
     ): ConsumerSubclient<T> {
-        return ConsumerSubclient(connection, this, topic, key, type, callback).also {
+        return ConsumerSubclient(connection, this, topic, key, type, isNullable, callback).also {
             registerConsumer(it)
         }
     }
 
-    inline fun <reified T : Any> producer(
+    inline fun <reified T> producer(
         topic: String,
         key: String,
     ): ProducerSubclient<T> {
-        return producer(topic, key, T::class.java)
+        return producer(topic, key, T::class.java, null is T)
     }
 
-    fun <T : Any> producer(
+    fun <T> producer(
         topic: String,
         key: String,
         type: Class<T>,
+        isNullable: Boolean,
     ): ProducerSubclient<T> {
-        return ProducerSubclient(connection, this, topic, key, type).also {
+        return ProducerSubclient(connection, this, topic, key, type, isNullable).also {
             registerProducer(it)
         }
     }
 
-    inline fun <reified RequestT : Any, reified ResponseT : Any> rpc(
+    inline fun <reified RequestT, reified ResponseT> rpc(
         topic: String,
         key: String,
-        noinline callback: suspend CoroutineScope.(RequestT) -> ResponseT,
+        noinline callback: suspend CoroutineScope.(BrokerMessage<RequestT>) -> ResponseT,
     ): RpcClient<RequestT, ResponseT> {
-        return RpcClient(this, topic, key, RequestT::class.java, ResponseT::class.java, callback)
+        return RpcClient(
+            this,
+            topic,
+            key,
+            RequestT::class.java,
+            null is RequestT,
+            ResponseT::class.java,
+            null is ResponseT,
+            callback,
+        )
     }
 
     fun destroy() {

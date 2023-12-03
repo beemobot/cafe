@@ -39,8 +39,8 @@ class RatelimitClient(connection: BrokerConnection) : BrokerClient(connection) {
         type: String,
     ) {
         val sourceCluster = "${msg.headers.sourceService}/${msg.headers.sourceInstance}"
-        val client = msg.value?.discordClientId ?: "default"
-        val expiresAt = msg.value?.requestExpiresAt
+        val client = msg.value.discordClientId ?: "default"
+        val expiresAt = msg.value.requestExpiresAt
         if (expiresAt != null && (expiresAt + EXPIRY_GRACE_PERIOD) < System.currentTimeMillis()) {
             log.info("Incoming expired '$type' quota request from client '$client' in cluster $sourceCluster, ignoring")
             // If the request has already expired, ignore it to not eat quotas unnecessarily

@@ -1,6 +1,7 @@
 package gg.beemo.latte.broker.kafka
 
 import gg.beemo.latte.broker.BaseBrokerMessageHeaders
+import gg.beemo.latte.broker.MessageId
 import org.apache.kafka.common.header.Headers
 
 class KafkaMessageHeaders(
@@ -8,8 +9,8 @@ class KafkaMessageHeaders(
     sourceInstance: String,
     targetServices: Set<String>,
     targetInstances: Set<String>,
-    inReplyTo: String?,
-    messageId: String?,
+    inReplyTo: MessageId?,
+    messageId: MessageId?,
 ) : BaseBrokerMessageHeaders(
     sourceService,
     sourceInstance,

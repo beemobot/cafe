@@ -1,9 +1,9 @@
 package gg.beemo.latte.broker
 
-data class BrokerMessage<T : Any>(
+data class BrokerMessage<T>(
     val client: BrokerClient,
     val topic: String,
     val key: String,
-    val value: T?,
+    val value: T,
     val headers: BaseBrokerMessageHeaders
 )
