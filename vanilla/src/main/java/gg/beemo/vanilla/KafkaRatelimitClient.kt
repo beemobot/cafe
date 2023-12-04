@@ -2,10 +2,9 @@ package gg.beemo.vanilla
 
 import gg.beemo.latte.broker.BrokerClient
 import gg.beemo.latte.broker.BrokerConnection
-import gg.beemo.latte.broker.BrokerMessage
+import gg.beemo.latte.broker.IgnoreRpcRequest
 import gg.beemo.latte.logging.Log
 import gg.beemo.latte.ratelimit.SharedRatelimitData
-import gg.beemo.latte.ratelimit.SharedRatelimitData.RatelimitClientData
 import gg.beemo.latte.util.SuspendingRatelimit
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.time.Duration
@@ -21,37 +20,33 @@ class RatelimitClient(connection: BrokerConnection) : BrokerClient(connection) {
     private val identifyRatelimitProvider = RatelimitProvider(1, 5.seconds)
 
     init {
-        rpc<RatelimitClientData, Unit>(
+        rpc<SharedRatelimitData.RatelimitRequestData, Unit>(
             SharedRatelimitData.RATELIMIT_TOPIC,
-            SharedRatelimitData.KEY_REQUEST_GLOBAL_QUOTA,
+            SharedRatelimitData.KEY_REQUEST_QUOTA,
         ) {
-            handleRatelimitRequest(it, globalRatelimitProvider, "global")
-        }
+            val msg = it.value
+            val type = msg.type
+            val clientId = msg.discordClientId ?: "default"
+            val service = "${it.headers.sourceService}/${it.headers.sourceInstance} (${clientId})"
+            val expiresAt = msg.requestExpiresAt
 
-        rpc<RatelimitClientData, Unit>(
-            SharedRatelimitData.RATELIMIT_TOPIC,
-            SharedRatelimitData.KEY_REQUEST_IDENTIFY_QUOTA,
-        ) {
-            handleRatelimitRequest(it, identifyRatelimitProvider, "identify")
-        }
-    }
+            if (expiresAt != null && (expiresAt + EXPIRY_GRACE_PERIOD) < System.currentTimeMillis()) {
+                log.info("Incoming expired $type quota request from service $service, ignoring")
+                // If the request has already expired, ignore it to not eat quotas unnecessarily
+                throw IgnoreRpcRequest()
+            }
 
-    private suspend fun handleRatelimitRequest(
-        msg: BrokerMessage<RatelimitClientData>,
-        ratelimitProvider: RatelimitProvider,
-        type: String,
-    ) {
-        val clientId = msg.value.discordClientId ?: "default"
-        val service = "${msg.headers.sourceService}/${msg.headers.sourceInstance} (${clientId})"
-        val expiresAt = msg.value.requestExpiresAt
-        if (expiresAt != null && (expiresAt + EXPIRY_GRACE_PERIOD) < System.currentTimeMillis()) {
-            log.info("Incoming expired $type quota request from service $service, ignoring")
-            // If the request has already expired, ignore it to not eat quotas unnecessarily
-            return
+            log.debug("Incoming {} quota request from service {}", type, service)
+            val provider = when (msg.type) {
+                SharedRatelimitData.RatelimitType.GLBOAL -> globalRatelimitProvider
+                SharedRatelimitData.RatelimitType.IDENTIFY -> identifyRatelimitProvider
+                else -> throw IllegalArgumentException("Unknown ratelimit type ${msg.type}")
+            }
+
+            provider.getClientRatelimit(clientId).requestQuota()
+
+            log.debug("Granted {} quota request for service {}", type, service)
         }
-        log.debug("Incoming {} quota request from service {}", type, service)
-        ratelimitProvider.getClientRatelimit(clientId).requestQuota()
-        log.debug("Granted {} quota request for service {}", type, service)
     }
 
 }

@@ -8,6 +8,7 @@ import gg.beemo.latte.util.MoshiJsLongAdapter
 import gg.beemo.latte.util.MoshiUnitAdapter
 import gg.beemo.latte.util.SuspendingCountDownLatch
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -184,7 +185,11 @@ class RpcClient<RequestT, ResponseT>(
     private val requestProducer = client.producer(topic, key, options, requestType, requestIsNullable)
 
     private val requestConsumer = client.consumer(topic, key, options, requestType, responseIsNullable) {
-        val result = callback(it)
+        val result = try {
+            callback(it)
+        } catch (_: IgnoreRpcRequest) {
+            return@consumer
+        }
         val responseProducer = client.producer(
             client.toResponseTopic(topic),
             client.toResponseKey(key),
@@ -254,7 +259,11 @@ class RpcClient<RequestT, ResponseT>(
             messageId.set(requestProducer.send(request, services, instances))
 
             if (timeoutLatch != null) {
-                timeoutLatch.awaitThrowing(timeout)
+                try {
+                    timeoutLatch.awaitThrowing(timeout)
+                } catch (_: TimeoutCancellationException) {
+                    throw RpcRequestTimeout("RPC request timed out after $timeout")
+                }
             } else {
                 delay(timeout)
             }
@@ -269,3 +278,7 @@ class RpcClient<RequestT, ResponseT>(
     }
 
 }
+
+sealed class BrokerException(message: String?) : Exception(message)
+class RpcRequestTimeout(message: String) : BrokerException(message)
+class IgnoreRpcRequest : BrokerException(null)
