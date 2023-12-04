@@ -155,8 +155,10 @@ abstract class BrokerClient(
         return topics[topic]?.keys?.get(key)
     }
 
-    internal fun createResponseTopic(topic: String): String = "$topic.responses"
-    internal fun createResponseKey(key: String): String = "$key.response"
+    internal fun toResponseTopic(topic: String): String =
+        if (connection.supportsTopicHotSwap) "$topic.responses" else topic
+
+    internal fun toResponseKey(key: String): String = "$key.response"
 
     private fun onTopicMessage(
         topic: String,

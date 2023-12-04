@@ -6,4 +6,9 @@ data class BrokerMessage<T>(
     val key: String,
     val value: T,
     val headers: BaseBrokerMessageHeaders
-)
+) {
+
+    val messageId: String
+        get() = headers.messageId
+
+}

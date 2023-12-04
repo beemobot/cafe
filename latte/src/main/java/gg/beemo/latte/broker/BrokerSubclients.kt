@@ -186,8 +186,8 @@ class RpcClient<RequestT, ResponseT>(
     private val requestConsumer = client.consumer(topic, key, options, requestType, responseIsNullable) {
         val result = callback(it)
         val responseProducer = client.producer(
-            client.createResponseTopic(topic),
-            client.createResponseKey(key),
+            client.toResponseTopic(topic),
+            client.toResponseKey(key),
             options,
             responseType,
             responseIsNullable,
@@ -197,7 +197,7 @@ class RpcClient<RequestT, ResponseT>(
             result,
             services = setOf(it.headers.sourceService),
             instances = setOf(it.headers.sourceInstance),
-            inReplyTo = it.headers.messageId,
+            inReplyTo = it.messageId,
         )
         responseProducer.destroy()
     }
@@ -230,8 +230,8 @@ class RpcClient<RequestT, ResponseT>(
             val messageId = AtomicReference<String?>(null)
 
             val responseConsumer = client.consumer(
-                client.createResponseTopic(topic),
-                client.createResponseKey(key),
+                client.toResponseTopic(topic),
+                client.toResponseKey(key),
                 options,
                 responseType,
                 responseIsNullable,
