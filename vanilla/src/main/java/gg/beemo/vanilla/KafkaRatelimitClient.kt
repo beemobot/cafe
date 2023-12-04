@@ -3,7 +3,7 @@ package gg.beemo.vanilla
 import gg.beemo.latte.broker.BrokerClient
 import gg.beemo.latte.broker.BrokerConnection
 import gg.beemo.latte.broker.BrokerMessage
-import gg.beemo.latte.logging.log
+import gg.beemo.latte.logging.Log
 import gg.beemo.latte.ratelimit.SharedRatelimitData
 import gg.beemo.latte.ratelimit.SharedRatelimitData.RatelimitClientData
 import gg.beemo.latte.util.SuspendingRatelimit
@@ -16,21 +16,24 @@ private val EXPIRY_GRACE_PERIOD = 5.seconds.inWholeMilliseconds
 
 class RatelimitClient(connection: BrokerConnection) : BrokerClient(connection) {
 
+    private val log by Log
     private val globalRatelimitProvider = RatelimitProvider(50, 1.seconds)
     private val identifyRatelimitProvider = RatelimitProvider(1, 5.seconds)
 
-    private val globalRatelimitRpc = rpc<RatelimitClientData, Unit>(
-        SharedRatelimitData.RATELIMIT_TOPIC,
-        SharedRatelimitData.KEY_REQUEST_GLOBAL_QUOTA,
-    ) {
-        handleRatelimitRequest(it, globalRatelimitProvider, "global")
-    }
+    init {
+        rpc<RatelimitClientData, Unit>(
+            SharedRatelimitData.RATELIMIT_TOPIC,
+            SharedRatelimitData.KEY_REQUEST_GLOBAL_QUOTA,
+        ) {
+            handleRatelimitRequest(it, globalRatelimitProvider, "global")
+        }
 
-    private val identifyRatelimitRpc = rpc<RatelimitClientData, Unit>(
-        SharedRatelimitData.RATELIMIT_TOPIC,
-        SharedRatelimitData.KEY_REQUEST_IDENTIFY_QUOTA,
-    ) {
-        handleRatelimitRequest(it, identifyRatelimitProvider, "identify")
+        rpc<RatelimitClientData, Unit>(
+            SharedRatelimitData.RATELIMIT_TOPIC,
+            SharedRatelimitData.KEY_REQUEST_IDENTIFY_QUOTA,
+        ) {
+            handleRatelimitRequest(it, identifyRatelimitProvider, "identify")
+        }
     }
 
     private suspend fun handleRatelimitRequest(
@@ -38,17 +41,17 @@ class RatelimitClient(connection: BrokerConnection) : BrokerClient(connection) {
         ratelimitProvider: RatelimitProvider,
         type: String,
     ) {
-        val sourceCluster = "${msg.headers.sourceService}/${msg.headers.sourceInstance}"
-        val client = msg.value.discordClientId ?: "default"
+        val clientId = msg.value.discordClientId ?: "default"
+        val service = "${msg.headers.sourceService}/${msg.headers.sourceInstance} (${clientId})"
         val expiresAt = msg.value.requestExpiresAt
         if (expiresAt != null && (expiresAt + EXPIRY_GRACE_PERIOD) < System.currentTimeMillis()) {
-            log.info("Incoming expired '$type' quota request from client '$client' in cluster $sourceCluster, ignoring")
+            log.info("Incoming expired $type quota request from service $service, ignoring")
             // If the request has already expired, ignore it to not eat quotas unnecessarily
             return
         }
-        log.debug("Incoming '{}' quota request from client '{}' in cluster {}", type, client, sourceCluster)
-        ratelimitProvider.getClientRatelimit(client).requestQuota()
-        log.debug("Granted '{}' quota request for client '{}' in cluster {}", type, client, sourceCluster)
+        log.debug("Incoming {} quota request from service {}", type, service)
+        ratelimitProvider.getClientRatelimit(clientId).requestQuota()
+        log.debug("Granted {} quota request for service {}", type, service)
     }
 
 }
@@ -57,7 +60,7 @@ private class RatelimitProvider(private val burst: Int, private val duration: Du
 
     private val limiters = ConcurrentHashMap<String, SuspendingRatelimit>()
 
-    fun getClientRatelimit(client: String): SuspendingRatelimit = limiters.computeIfAbsent(client) {
+    fun getClientRatelimit(clientId: String): SuspendingRatelimit = limiters.computeIfAbsent(clientId) {
         SuspendingRatelimit(burst, duration)
     }
 
