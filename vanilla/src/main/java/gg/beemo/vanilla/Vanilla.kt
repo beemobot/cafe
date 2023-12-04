@@ -12,6 +12,7 @@ object Vanilla {
 
     @JvmStatic
     fun main(args: Array<String>) = runBlocking {
+        log.info("Starting vanilla")
         log.debug("Loading configuration")
         Configurator.create().mirror(Config::class.java)
 
@@ -19,7 +20,7 @@ object Vanilla {
         val brokerConnection = KafkaConnection(
             Config.KAFKA_HOST,
             CommonConfig.BrokerServices.VANILLA,
-            "0",
+            "0", // There will only ever be one instance of vanilla
             Config.KAFKA_USE_TLS,
         )
 
