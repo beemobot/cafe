@@ -3,7 +3,7 @@ package gg.beemo.latte.broker.kafka
 import gg.beemo.latte.broker.BaseBrokerMessageHeaders
 import gg.beemo.latte.broker.BrokerConnection
 import gg.beemo.latte.broker.MessageId
-import gg.beemo.latte.logging.log
+import gg.beemo.latte.logging.Log
 import kotlinx.coroutines.future.await
 import kotlinx.coroutines.runBlocking
 import org.apache.kafka.clients.CommonClientConfigs
@@ -37,6 +37,7 @@ class KafkaConnection(
 
     override val supportsTopicHotSwap = false
     private val kafkaHostsString = kafkaHosts.joinToString(",")
+    private val log by Log
 
     private var producer: KafkaProducer<String, String>? = null
     private var consumer: KafkaStreams? = null
@@ -44,7 +45,7 @@ class KafkaConnection(
     private val isRunning: Boolean
         get() = producer != null && consumer != null
 
-    override suspend fun send(
+    override suspend fun abstractSend(
         topic: String,
         key: String,
         value: String,

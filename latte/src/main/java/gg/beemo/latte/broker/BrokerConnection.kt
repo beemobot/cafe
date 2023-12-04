@@ -1,6 +1,6 @@
 package gg.beemo.latte.broker
 
-import gg.beemo.latte.logging.log
+import gg.beemo.latte.logging.Log
 import java.util.*
 
 fun interface TopicListener {
@@ -17,17 +17,35 @@ abstract class BrokerConnection {
 
     protected val topicListeners: MutableMap<String, MutableSet<TopicListener>> = Collections.synchronizedMap(HashMap())
 
+    private val log by Log
+
     abstract suspend fun start()
     open fun destroy() {
         topicListeners.clear()
     }
 
-    internal abstract suspend fun send(
+    internal abstract suspend fun abstractSend(
         topic: String,
         key: String,
         value: String,
         headers: BaseBrokerMessageHeaders,
     ): MessageId
+
+    internal suspend fun send(
+        topic: String,
+        key: String,
+        value: String,
+        headers: BaseBrokerMessageHeaders,
+    ): MessageId {
+        log.trace(
+            "Sending message {} with key '{}' in topic '{}' with value: {}",
+            headers.messageId,
+            key,
+            topic,
+            value,
+        )
+        return abstractSend(topic, key, value, headers)
+    }
 
     internal abstract fun createHeaders(
         targetServices: Set<String> = emptySet(),
@@ -40,6 +58,7 @@ abstract class BrokerConnection {
 
     internal fun on(topic: String, cb: TopicListener) {
         topicListeners.computeIfAbsent(topic) {
+            log.debug("Creating new topic '{}'", topic)
             createTopic(topic)
             Collections.synchronizedSet(HashSet())
         }.add(cb)
@@ -49,6 +68,7 @@ abstract class BrokerConnection {
         topicListeners.computeIfPresent(topic) { _, listeners ->
             listeners.remove(cb)
             if (listeners.size == 0) {
+                log.debug("Removing topic '{}'", topic)
                 removeTopic(topic)
                 null
             } else {
@@ -110,6 +130,13 @@ abstract class BrokerConnection {
     }
 
     private fun invokeLocalCallbacks(topic: String, key: String, value: String, headers: BaseBrokerMessageHeaders) {
+        log.trace(
+            "Dispatching message {} with key '{}' in topic '{}' to local listeners with value: {}",
+            headers.messageId,
+            key,
+            topic,
+            value,
+        )
         val listeners = topicListeners[topic] ?: return
         for (listener in listeners) {
             try {

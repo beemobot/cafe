@@ -6,13 +6,14 @@ class LocalConnection : BrokerConnection() {
     override val instanceId = "local-instance"
     override val supportsTopicHotSwap = true
 
-    override suspend fun send(
+    override suspend fun abstractSend(
         topic: String,
         key: String,
         value: String,
         headers: BaseBrokerMessageHeaders,
     ): MessageId {
-        if (shouldDispatchExternallyAfterShortCircuit(topic, key, value, headers) &&
+        if (
+            shouldDispatchExternallyAfterShortCircuit(topic, key, value, headers) &&
             (headers.targetServices.isNotEmpty() || headers.targetInstances.isNotEmpty())
         ) {
             throw IllegalArgumentException(

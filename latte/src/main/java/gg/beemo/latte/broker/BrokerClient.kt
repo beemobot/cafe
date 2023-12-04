@@ -1,6 +1,6 @@
 package gg.beemo.latte.broker
 
-import gg.beemo.latte.logging.log
+import gg.beemo.latte.logging.Log
 import kotlinx.coroutines.*
 import java.util.Collections
 
@@ -20,27 +20,32 @@ private class KeyMetadata(
 abstract class BrokerClient(
     @PublishedApi
     internal val connection: BrokerConnection,
+    private val consumerScope: CoroutineScope = CoroutineScope(Dispatchers.Default + SupervisorJob()),
 ) {
 
-    private val consumerScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+    private val log by Log
     private val topics: MutableMap<String, TopicMetadata> = Collections.synchronizedMap(HashMap())
 
     inline fun <reified T> consumer(
         topic: String,
         key: String,
+        options: BrokerClientOptions = BrokerClientOptions(),
         noinline callback: suspend CoroutineScope.(BrokerMessage<T>) -> Unit,
     ): ConsumerSubclient<T> {
-        return consumer(topic, key, T::class.java, null is T, callback)
+        return consumer(topic, key, options, T::class.java, null is T, callback)
     }
 
-    fun <T> consumer(
+    @PublishedApi
+    internal fun <T> consumer(
         topic: String,
         key: String,
+        options: BrokerClientOptions = BrokerClientOptions(),
         type: Class<T>,
         isNullable: Boolean,
         callback: suspend CoroutineScope.(BrokerMessage<T>) -> Unit,
     ): ConsumerSubclient<T> {
-        return ConsumerSubclient(connection, this, topic, key, type, isNullable, callback).also {
+        log.debug("Creating consumer for key '{}' in topic '{}' with type {}", key, topic, type.name)
+        return ConsumerSubclient(connection, this, topic, key, options, type, isNullable, callback).also {
             registerConsumer(it)
         }
     }
@@ -48,17 +53,21 @@ abstract class BrokerClient(
     inline fun <reified T> producer(
         topic: String,
         key: String,
+        options: BrokerClientOptions = BrokerClientOptions(),
     ): ProducerSubclient<T> {
-        return producer(topic, key, T::class.java, null is T)
+        return producer(topic, key, options, T::class.java, null is T)
     }
 
-    fun <T> producer(
+    @PublishedApi
+    internal fun <T> producer(
         topic: String,
         key: String,
+        options: BrokerClientOptions = BrokerClientOptions(),
         type: Class<T>,
         isNullable: Boolean,
     ): ProducerSubclient<T> {
-        return ProducerSubclient(connection, this, topic, key, type, isNullable).also {
+        log.debug("Creating producer for key '{}' in topic '{}' with type {}", key, topic, type.name)
+        return ProducerSubclient(connection, this, topic, key, options, type, isNullable).also {
             registerProducer(it)
         }
     }
@@ -66,12 +75,14 @@ abstract class BrokerClient(
     inline fun <reified RequestT, reified ResponseT> rpc(
         topic: String,
         key: String,
+        options: BrokerClientOptions = BrokerClientOptions(),
         noinline callback: suspend CoroutineScope.(BrokerMessage<RequestT>) -> ResponseT,
     ): RpcClient<RequestT, ResponseT> {
         return RpcClient(
             this,
             topic,
             key,
+            options,
             RequestT::class.java,
             null is RequestT,
             ResponseT::class.java,
@@ -80,7 +91,7 @@ abstract class BrokerClient(
         )
     }
 
-    fun destroy() {
+    fun destroy(cancelScope: Boolean = true) {
         val producers = topics.values.flatMap { metadata -> metadata.keys.values.flatMap { it.producers } }
         val consumers = topics.values.flatMap { metadata -> metadata.keys.values.flatMap { it.consumers } }
         producers.forEach {
@@ -90,7 +101,9 @@ abstract class BrokerClient(
             it.destroy()
         }
         topics.clear()
-        consumerScope.cancel()
+        if (cancelScope) {
+            consumerScope.cancel()
+        }
     }
 
     private fun registerProducer(producer: ProducerSubclient<*>) {
@@ -112,11 +125,13 @@ abstract class BrokerClient(
     }
 
     internal fun deregisterProducer(producer: ProducerSubclient<*>) {
+        log.debug("Removing producer for key '{}' in topic '{}'", producer.key, producer.topic)
         val metadata = getExistingKeyMetadata(producer.topic, producer.key)
         metadata?.producers?.remove(producer)
     }
 
     internal fun deregisterConsumer(consumer: ConsumerSubclient<*>) {
+        log.debug("Removing consumer for key '{}' in topic '{}'", consumer.key, consumer.topic)
         val metadata = getExistingKeyMetadata(consumer.topic, consumer.key)
         if (metadata?.consumers?.remove(consumer) == true && metadata.consumers.isEmpty()) {
             metadata.topic.connectionListener?.let {

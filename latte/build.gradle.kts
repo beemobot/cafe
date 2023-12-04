@@ -10,7 +10,9 @@ version = "1.0.0"
 dependencies {
 
     // Kotlin
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
+    val kotlinCoroutinesVersion = "1.7.3"
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:$kotlinCoroutinesVersion")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:$kotlinCoroutinesVersion")
 
     // Kafka
     val kafkaVersion = "3.2.3"
@@ -24,7 +26,9 @@ dependencies {
 
     // Misc
     implementation("org.jetbrains:annotations:24.1.0")
-    compileOnly("org.apache.logging.log4j:log4j-api:2.22.0")
+    val log4jVersion = "2.22.0"
+    compileOnly("org.apache.logging.log4j:log4j-api:$log4jVersion")
+    testImplementation("org.apache.logging.log4j:log4j-core:$log4jVersion")
 
     // JUnit testing framework
     val junitVersion = "5.10.1"

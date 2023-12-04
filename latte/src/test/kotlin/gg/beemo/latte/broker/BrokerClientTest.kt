@@ -1,27 +1,36 @@
 package gg.beemo.latte.broker
 
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.Test
 
 class BrokerClientTest {
 
     private val connection = LocalConnection()
-    private val client = TestBrokerClient(connection)
 
     @Test
-    fun `test greeting RPC`() {
-        runBlocking {
-            val response = client.greetingRpc.call(GreetingRequest("Beemo"))
-            Assertions.assertEquals("Hello, Beemo", response.value.greeting)
-        }
+    fun `test greeting RPC`() = withTestClient { client ->
+        val response = client.greetingRpc.call(GreetingRequest("Beemo"))
+        Assertions.assertEquals("Hello, Beemo", response.value.greeting)
     }
 
     @Test
-    fun `test null RPC`() {
-        runBlocking {
-            val response = client.nullRpc.call(null)
-            Assertions.assertNull(response.value)
+    fun `test null RPC`() = withTestClient { client ->
+        val response = client.nullRpc.call(null)
+        Assertions.assertNull(response.value)
+    }
+
+    @Test
+    fun `test safe Long serializer`() = withTestClient { client ->
+        client.safeLongProducer.send(1337)
+    }
+
+    private fun withTestClient(block: suspend (TestBrokerClient) -> Unit) = runTest {
+        val client = TestBrokerClient(connection, this)
+        try {
+            block(client)
+        } finally {
+            client.destroy(false)
         }
     }
 

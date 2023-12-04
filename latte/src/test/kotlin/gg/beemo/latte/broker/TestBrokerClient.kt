@@ -1,8 +1,9 @@
 package gg.beemo.latte.broker
 
 import com.squareup.moshi.JsonClass
-import kotlinx.coroutines.delay
-import kotlin.time.Duration.Companion.seconds
+import gg.beemo.latte.logging.Log
+import kotlinx.coroutines.CoroutineScope
+import org.junit.jupiter.api.Assertions
 
 
 @JsonClass(generateAdapter = true)
@@ -11,13 +12,18 @@ data class GreetingRequest(val name: String)
 @JsonClass(generateAdapter = true)
 data class GreetingResponse(val greeting: String)
 
-class TestBrokerClient(connection: BrokerConnection) : BrokerClient(connection) {
+class TestBrokerClient(
+    connection: BrokerConnection,
+    scope: CoroutineScope,
+) : BrokerClient(connection, scope) {
+
+    private val log by Log
 
     val greetingRpc = rpc<GreetingRequest, GreetingResponse>(
         topic = "rpc.greetings",
         key = "greeting.requests",
     ) {
-        delay(2.seconds)
+        log.info("greetingRpc received request: ${it.value}")
         return@rpc GreetingResponse("Hello, ${it.value.name}")
     }
 
@@ -25,10 +31,26 @@ class TestBrokerClient(connection: BrokerConnection) : BrokerClient(connection) 
         topic = "null",
         key = "null",
     ) {
-        if (it.value != null) {
-            throw IllegalStateException("nullRpc received non-null")
-        }
+        log.info("nullRpc received request: ${it.value}")
+        Assertions.assertNull(it.value)
         return@rpc null
+    }
+
+    val safeLongProducer = producer<Long>(
+        topic = "long",
+        key = "long",
+        options = BrokerClientOptions(useSafeJsLongs = true),
+    )
+
+    init {
+        consumer<String>(
+            topic = "long",
+            key = "long",
+            options = BrokerClientOptions(useSafeJsLongs = false),
+        ) {
+            log.info("safeLongConsumer received: ${it.value}")
+            Assertions.assertEquals("1337", it.value)
+        }
     }
 
 }
