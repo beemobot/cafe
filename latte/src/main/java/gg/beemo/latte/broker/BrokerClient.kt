@@ -30,7 +30,7 @@ abstract class BrokerClient(
         topic: String,
         key: String,
         options: BrokerClientOptions = BrokerClientOptions(),
-        noinline callback: suspend CoroutineScope.(BrokerMessage<T>) -> Unit,
+        noinline callback: suspend CoroutineScope.(BaseBrokerMessage<T>) -> Unit,
     ): ConsumerSubclient<T> {
         return consumer(topic, key, options, T::class.java, null is T, callback)
     }
@@ -42,7 +42,7 @@ abstract class BrokerClient(
         options: BrokerClientOptions = BrokerClientOptions(),
         type: Class<T>,
         isNullable: Boolean,
-        callback: suspend CoroutineScope.(BrokerMessage<T>) -> Unit,
+        callback: suspend CoroutineScope.(BaseBrokerMessage<T>) -> Unit,
     ): ConsumerSubclient<T> {
         log.debug("Creating consumer for key '{}' in topic '{}' with type {}", key, topic, type.name)
         return ConsumerSubclient(connection, this, topic, key, options, type, isNullable, callback).also {
@@ -76,7 +76,7 @@ abstract class BrokerClient(
         topic: String,
         key: String,
         options: BrokerClientOptions = BrokerClientOptions(),
-        noinline callback: suspend CoroutineScope.(BrokerMessage<RequestT>) -> ResponseT,
+        noinline callback: suspend CoroutineScope.(BaseRpcRequestMessage<RequestT, ResponseT>) -> Pair<RpcStatus, ResponseT>,
     ): RpcClient<RequestT, ResponseT> {
         return RpcClient(
             this,
@@ -164,7 +164,7 @@ abstract class BrokerClient(
         topic: String,
         key: String,
         value: String,
-        headers: BaseBrokerMessageHeaders,
+        headers: BrokerMessageHeaders,
     ) {
         val metadata = getExistingKeyMetadata(topic, key) ?: return
         for (consumer in metadata.consumers) {

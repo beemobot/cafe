@@ -10,7 +10,7 @@ class LocalConnection : BrokerConnection() {
         topic: String,
         key: String,
         value: String,
-        headers: BaseBrokerMessageHeaders,
+        headers: BrokerMessageHeaders,
     ): MessageId {
         if (
             shouldDispatchExternallyAfterShortCircuit(topic, key, value, headers) &&
@@ -34,8 +34,8 @@ class LocalConnection : BrokerConnection() {
         targetServices: Set<String>,
         targetInstances: Set<String>,
         inReplyTo: MessageId?
-    ): BaseBrokerMessageHeaders {
-        return BaseBrokerMessageHeaders(serviceName, instanceId, targetServices, targetInstances, inReplyTo, null)
+    ): BrokerMessageHeaders {
+        return BrokerMessageHeaders(serviceName, instanceId, targetServices, targetInstances, inReplyTo, null)
     }
 
     override fun createTopic(topic: String) {

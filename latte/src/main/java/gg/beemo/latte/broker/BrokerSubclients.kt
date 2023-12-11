@@ -24,6 +24,7 @@ data class BrokerClientOptions(
     val useSafeJsLongs: Boolean = false,
 )
 
+// TODO Add error handling, some try-finally to close the producer/consumer even with errors
 sealed class BaseSubclient(
     protected val connection: BrokerConnection,
     protected val client: BrokerClient,
@@ -80,30 +81,35 @@ class ProducerSubclient<T>(
         services: Set<String> = emptySet(),
         instances: Set<String> = emptySet(),
     ): MessageId {
-        return send(data, services, instances, null)
+        val msg = BrokerMessage(
+            topic,
+            key,
+            data,
+            BrokerMessageHeaders(
+                connection,
+                targetServices = services,
+                targetInstances = instances,
+                messageId = null,
+            ),
+        )
+        return internalSend(msg)
     }
 
-    internal suspend fun send(
-        data: T,
-        services: Set<String>,
-        instances: Set<String>,
-        inReplyTo: MessageId?,
-    ): MessageId {
+    internal suspend fun internalSend(msg: BaseBrokerMessage<T>): MessageId {
         if (!isNullable) {
-            requireNotNull(data) {
+            requireNotNull(msg.value) {
                 "Cannot send null message for non-nullable type with key '$key' in topic '$topic'"
             }
         }
-        val strigifiedData = stringifyOutgoing(data)
-        val headers = connection.createHeaders(services, instances, inReplyTo)
+        val strigifiedData = stringifyOutgoing(msg.value)
         log.trace(
             "Sending message {} with key '{}' in topic '{}' with value: {}",
-            headers.messageId,
+            msg.messageId,
             key,
             topic,
             strigifiedData,
         )
-        return connection.send(topic, key, strigifiedData, headers)
+        return connection.send(topic, key, strigifiedData, msg.headers)
     }
 
     private fun stringifyOutgoing(data: T?): String {
@@ -120,7 +126,7 @@ class ConsumerSubclient<T>(
     options: BrokerClientOptions,
     incomingType: Class<T>,
     private val isNullable: Boolean,
-    private val callback: suspend CoroutineScope.(BrokerMessage<T>) -> Unit,
+    private val callback: suspend CoroutineScope.(BaseBrokerMessage<T>) -> Unit,
 ) : BaseSubclient(
     connection,
     client,
@@ -138,7 +144,7 @@ class ConsumerSubclient<T>(
 
     internal suspend fun onIncomingMessage(
         value: String,
-        headers: BaseBrokerMessageHeaders,
+        headers: BrokerMessageHeaders,
     ) = coroutineScope {
         val data = parseIncoming(value)
         if (!isNullable) {
@@ -146,7 +152,7 @@ class ConsumerSubclient<T>(
                 "Received null message for non-nullable type with key '$key' in topic '$topic'"
             }
         }
-        val message = BrokerMessage(client, topic, key, data, headers)
+        val message = BrokerMessage(topic, key, data, headers)
         log.trace(
             "Received message {} with key '{}' in topic '{}' with value: {}",
             headers.messageId,
@@ -155,7 +161,7 @@ class ConsumerSubclient<T>(
             value,
         )
         @Suppress("UNCHECKED_CAST") // Safe due to above null validation
-        callback(message as BrokerMessage<T>)
+        callback(message as BaseBrokerMessage<T>)
     }
 
     private fun parseIncoming(json: String): T? {
@@ -173,7 +179,7 @@ class RpcClient<RequestT, ResponseT>(
     requestIsNullable: Boolean,
     private val responseType: Class<ResponseT>,
     private val responseIsNullable: Boolean,
-    private val callback: suspend CoroutineScope.(BrokerMessage<RequestT>) -> ResponseT,
+    private val callback: suspend CoroutineScope.(BaseRpcRequestMessage<RequestT, ResponseT>) -> Pair<RpcStatus, ResponseT>,
 ) : BaseSubclient(
     client.connection,
     client,
@@ -183,13 +189,7 @@ class RpcClient<RequestT, ResponseT>(
 ) {
 
     private val requestProducer = client.producer(topic, key, options, requestType, requestIsNullable)
-
-    private val requestConsumer = client.consumer(topic, key, options, requestType, responseIsNullable) {
-        val result = try {
-            callback(it)
-        } catch (_: IgnoreRpcRequest) {
-            return@consumer
-        }
+    private val requestConsumer = client.consumer(topic, key, options, requestType, requestIsNullable) { msg ->
         val responseProducer = client.producer(
             client.toResponseTopic(topic),
             client.toResponseKey(key),
@@ -197,13 +197,34 @@ class RpcClient<RequestT, ResponseT>(
             responseType,
             responseIsNullable,
         )
-        // Send only to source service/instance that initiated this call
-        responseProducer.send(
-            result,
-            services = setOf(it.headers.sourceService),
-            instances = setOf(it.headers.sourceInstance),
-            inReplyTo = it.messageId,
-        )
+
+        suspend fun sendResponse(response: ResponseT, status: RpcStatus, isUpdate: Boolean) {
+            val responseMsg = RpcResponseMessage(
+                client.toResponseTopic(topic),
+                client.toResponseKey(key),
+                response,
+                RpcMessageHeaders(
+                    connection,
+                    // Send only to source service/instance that initiated this call
+                    targetServices = setOf(msg.headers.sourceService),
+                    targetInstances = setOf(msg.headers.sourceInstance),
+                    inReplyTo = msg.headers.messageId,
+                    status,
+                    isUpdate,
+                ),
+            )
+            responseProducer.internalSend(responseMsg)
+        }
+
+        val rpcMessage = msg.toRpcRequestMessage<ResponseT> { data, status ->
+            sendResponse(data, status, true)
+        }
+        val (status, response) = try {
+            callback(rpcMessage)
+        } catch (_: IgnoreRpcRequest) {
+            return@consumer
+        }
+        sendResponse(response, status, false)
         responseProducer.destroy()
     }
 
@@ -212,7 +233,7 @@ class RpcClient<RequestT, ResponseT>(
         services: Set<String> = emptySet(),
         instances: Set<String> = emptySet(),
         timeout: Duration = 10.seconds,
-    ): BrokerMessage<ResponseT> {
+    ): RpcResponseMessage<ResponseT> {
         return stream(request, services, instances, timeout, 1).single()
     }
 
@@ -222,7 +243,7 @@ class RpcClient<RequestT, ResponseT>(
         instances: Set<String> = emptySet(),
         timeout: Duration = 10.seconds,
         maxResponses: Int? = null,
-    ): Flow<BrokerMessage<ResponseT>> {
+    ): Flow<RpcResponseMessage<ResponseT>> {
         require(timeout.isFinite() || maxResponses != null) {
             "Must specify either a timeout or a max number of responses"
         }
@@ -241,10 +262,11 @@ class RpcClient<RequestT, ResponseT>(
                 responseType,
                 responseIsNullable,
             ) {
-                if (it.headers.inReplyTo != messageId.get()) {
+                val msg = it.toRpcResponseMessage()
+                if (msg.inReplyTo != messageId.get()) {
                     return@consumer
                 }
-                send(it)
+                send(msg)
                 timeoutLatch?.countDown()
                 val count = responseCounter.incrementAndGet()
                 if (maxResponses != null && count >= maxResponses) {
@@ -278,7 +300,3 @@ class RpcClient<RequestT, ResponseT>(
     }
 
 }
-
-sealed class BrokerException(message: String?) : Exception(message)
-class RpcRequestTimeout(message: String) : BrokerException(message)
-class IgnoreRpcRequest : BrokerException(null)

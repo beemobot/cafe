@@ -4,7 +4,7 @@ import gg.beemo.latte.logging.Log
 import java.util.*
 
 fun interface TopicListener {
-    fun onMessage(topic: String, key: String, value: String, headers: BaseBrokerMessageHeaders)
+    fun onMessage(topic: String, key: String, value: String, headers: BrokerMessageHeaders)
 }
 
 typealias MessageId = String
@@ -28,14 +28,14 @@ abstract class BrokerConnection {
         topic: String,
         key: String,
         value: String,
-        headers: BaseBrokerMessageHeaders,
+        headers: BrokerMessageHeaders,
     ): MessageId
 
     internal suspend fun send(
         topic: String,
         key: String,
         value: String,
-        headers: BaseBrokerMessageHeaders,
+        headers: BrokerMessageHeaders,
     ): MessageId {
         log.trace(
             "Sending message {} with key '{}' in topic '{}' with value: {}",
@@ -46,12 +46,6 @@ abstract class BrokerConnection {
         )
         return abstractSend(topic, key, value, headers)
     }
-
-    internal abstract fun createHeaders(
-        targetServices: Set<String> = emptySet(),
-        targetInstances: Set<String> = emptySet(),
-        inReplyTo: MessageId? = null,
-    ): BaseBrokerMessageHeaders
 
     protected abstract fun createTopic(topic: String)
     protected abstract fun removeTopic(topic: String)
@@ -82,7 +76,7 @@ abstract class BrokerConnection {
         topic: String,
         key: String,
         value: String,
-        headers: BaseBrokerMessageHeaders
+        headers: BrokerMessageHeaders
     ) {
         if (
             (headers.targetServices.isNotEmpty() && serviceName !in headers.targetServices) ||
@@ -104,7 +98,7 @@ abstract class BrokerConnection {
         topic: String,
         key: String,
         value: String,
-        headers: BaseBrokerMessageHeaders
+        headers: BrokerMessageHeaders
     ): Boolean {
         val targetServices = headers.targetServices
         val targetInstances = headers.targetInstances
@@ -129,7 +123,7 @@ abstract class BrokerConnection {
                 )
     }
 
-    private fun invokeLocalCallbacks(topic: String, key: String, value: String, headers: BaseBrokerMessageHeaders) {
+    private fun invokeLocalCallbacks(topic: String, key: String, value: String, headers: BrokerMessageHeaders) {
         log.trace(
             "Dispatching message {} with key '{}' in topic '{}' to local listeners with value: {}",
             headers.messageId,
