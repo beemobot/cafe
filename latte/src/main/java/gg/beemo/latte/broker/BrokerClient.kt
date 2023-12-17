@@ -12,7 +12,6 @@ private class TopicMetadata(
 
 private class KeyMetadata(
     val topic: TopicMetadata,
-    val key: String,
     val producers: MutableSet<ProducerSubclient<*>>,
     val consumers: MutableSet<ConsumerSubclient<*>>,
 )
@@ -76,7 +75,7 @@ abstract class BrokerClient(
         topic: String,
         key: String,
         options: BrokerClientOptions = BrokerClientOptions(),
-        noinline callback: suspend CoroutineScope.(BaseRpcRequestMessage<RequestT, ResponseT>) -> Pair<RpcStatus, ResponseT>,
+        noinline callback: suspend CoroutineScope.(BaseRpcRequestMessage<RequestT, ResponseT>) -> RpcResponse<ResponseT>,
     ): RpcClient<RequestT, ResponseT> {
         return RpcClient(
             this,
@@ -146,7 +145,7 @@ abstract class BrokerClient(
             TopicMetadata(topic, Collections.synchronizedMap(HashMap()))
         }
         val keyData = topicData.keys.computeIfAbsent(key) {
-            KeyMetadata(topicData, key, Collections.synchronizedSet(HashSet()), Collections.synchronizedSet(HashSet()))
+            KeyMetadata(topicData, Collections.synchronizedSet(HashSet()), Collections.synchronizedSet(HashSet()))
         }
         return keyData
     }

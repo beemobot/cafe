@@ -169,6 +169,8 @@ class ConsumerSubclient<T>(
 
 }
 
+typealias RpcResponse<ResponseT> = Pair<RpcStatus, ResponseT>
+
 class RpcClient<RequestT, ResponseT>(
     client: BrokerClient,
     topic: String,
@@ -178,7 +180,7 @@ class RpcClient<RequestT, ResponseT>(
     requestIsNullable: Boolean,
     private val responseType: Class<ResponseT>,
     private val responseIsNullable: Boolean,
-    private val callback: suspend CoroutineScope.(BaseRpcRequestMessage<RequestT, ResponseT>) -> Pair<RpcStatus, ResponseT>,
+    private val callback: suspend CoroutineScope.(BaseRpcRequestMessage<RequestT, ResponseT>) -> RpcResponse<ResponseT>,
 ) : BaseSubclient(
     client.connection,
     client,

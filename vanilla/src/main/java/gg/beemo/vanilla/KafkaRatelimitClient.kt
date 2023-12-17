@@ -3,6 +3,7 @@ package gg.beemo.vanilla
 import gg.beemo.latte.broker.BrokerClient
 import gg.beemo.latte.broker.BrokerConnection
 import gg.beemo.latte.broker.IgnoreRpcRequest
+import gg.beemo.latte.broker.RpcStatus
 import gg.beemo.latte.logging.Log
 import gg.beemo.latte.ratelimit.SharedRatelimitData
 import gg.beemo.latte.util.SuspendingRatelimit
@@ -46,6 +47,8 @@ class RatelimitClient(connection: BrokerConnection) : BrokerClient(connection) {
             provider.getClientRatelimit(clientId).requestQuota()
 
             log.debug("Granted {} quota request for service {}", type, service)
+
+            return@rpc RpcStatus.OK to Unit
         }
     }
 
