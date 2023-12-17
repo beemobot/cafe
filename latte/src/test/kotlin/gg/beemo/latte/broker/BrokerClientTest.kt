@@ -12,12 +12,14 @@ class BrokerClientTest {
     fun `test greeting RPC`() = withTestClient { client ->
         val response = client.greetingRpc.call(GreetingRequest("Beemo"))
         Assertions.assertEquals("Hello, Beemo", response.value.greeting)
+        Assertions.assertEquals(RpcStatus.OK, response.headers.status)
     }
 
     @Test
     fun `test null RPC`() = withTestClient { client ->
         val response = client.nullRpc.call(null)
         Assertions.assertNull(response.value)
+        Assertions.assertEquals(RpcStatus(1337), response.headers.status)
     }
 
     @Test

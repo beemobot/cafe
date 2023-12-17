@@ -12,6 +12,8 @@ class RpcMessageHeaders(headers: Map<String, String>) : BrokerMessageHeaders(hea
         headers.getOrDefault(HEADER_IS_UPDATE, "false").toBoolean()
     }
 
+    constructor(base: BrokerMessageHeaders) : this(base.headers)
+
     constructor(
         sourceService: String,
         sourceInstance: String,
@@ -27,7 +29,7 @@ class RpcMessageHeaders(headers: Map<String, String>) : BrokerMessageHeaders(hea
             targetServices,
             targetInstances,
             null,
-            mapOf(
+            extra = mapOf(
                 HEADER_IN_REPLY_TO to inReplyTo,
                 HEADER_STATUS to status.code.toString(),
                 HEADER_IS_UPDATE to isUpdate.toString(),

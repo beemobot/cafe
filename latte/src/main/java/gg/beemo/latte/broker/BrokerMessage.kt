@@ -16,8 +16,13 @@ open class BrokerMessage<T, H : BrokerMessageHeaders>(
         return RpcRequestMessage(topic, key, value, headers, updateSender)
     }
 
+    internal fun toRpcResponseMessage(): RpcResponseMessage<T> {
+        return RpcResponseMessage(topic, key, value, RpcMessageHeaders(headers))
+    }
+
 }
 
+typealias AbstractBrokerMessage<T> = BrokerMessage<T, out BrokerMessageHeaders>
 typealias BaseBrokerMessage<T> = BrokerMessage<T, BrokerMessageHeaders>
 typealias BaseRpcRequestMessage<RequestT, ResponseT> = RpcRequestMessage<RequestT, ResponseT, BrokerMessageHeaders>
 typealias RpcResponseMessage<T> = BrokerMessage<T, RpcMessageHeaders>

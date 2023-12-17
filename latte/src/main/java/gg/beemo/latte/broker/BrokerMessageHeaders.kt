@@ -63,13 +63,14 @@ open class BrokerMessageHeaders(val headers: Map<String, String>) {
             messageId: MessageId?,
             extra: Map<String, String> = emptyMap(),
         ): Map<String, String> {
-            return mapOf(
-                HEADER_SOURCE_SERVICE to sourceService,
-                HEADER_SOURCE_INSTANCE to sourceInstance,
-                HEADER_TARGET_SERVICES to joinToString(targetServices),
-                HEADER_TARGET_INSTANCES to joinToString(targetInstances),
-                HEADER_MESSAGE_ID to (messageId ?: UUID.randomUUID().toString()),
-            )
+            val headers = HashMap<String, String>()
+            headers[HEADER_SOURCE_SERVICE] = sourceService
+            headers[HEADER_SOURCE_INSTANCE] = sourceInstance
+            headers[HEADER_TARGET_SERVICES] = joinToString(targetServices)
+            headers[HEADER_TARGET_INSTANCES] = joinToString(targetInstances)
+            headers[HEADER_MESSAGE_ID] = messageId ?: UUID.randomUUID().toString()
+            headers.putAll(extra)
+            return headers
         }
 
         @JvmStatic

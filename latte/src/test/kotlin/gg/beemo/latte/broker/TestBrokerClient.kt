@@ -24,7 +24,7 @@ class TestBrokerClient(
         key = "greeting.requests",
     ) {
         log.info("greetingRpc received request: ${it.value}")
-        return@rpc GreetingResponse("Hello, ${it.value.name}")
+        return@rpc RpcStatus.OK to GreetingResponse("Hello, ${it.value.name}")
     }
 
     val nullRpc = rpc<Unit?, Unit?>(
@@ -33,7 +33,7 @@ class TestBrokerClient(
     ) {
         log.info("nullRpc received request: ${it.value}")
         Assertions.assertNull(it.value)
-        return@rpc null
+        return@rpc RpcStatus(1337) to null
     }
 
     val safeLongProducer = producer<Long>(

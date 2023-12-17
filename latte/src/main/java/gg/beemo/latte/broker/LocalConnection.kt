@@ -30,14 +30,6 @@ class LocalConnection : BrokerConnection() {
         // Nothing to start :)
     }
 
-    override fun createHeaders(
-        targetServices: Set<String>,
-        targetInstances: Set<String>,
-        inReplyTo: MessageId?
-    ): BrokerMessageHeaders {
-        return BrokerMessageHeaders(serviceName, instanceId, targetServices, targetInstances, inReplyTo, null)
-    }
-
     override fun createTopic(topic: String) {
         // noop
     }

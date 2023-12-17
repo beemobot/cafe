@@ -51,16 +51,16 @@ class KafkaConnection(
         value: String,
         headers: BrokerMessageHeaders,
     ): MessageId {
-        require(headers is KafkaMessageHeaders) {
-            "KafkaConnection requires headers of type KafkaMessageHeaders to be passed, got ${headers.javaClass.name} instead"
-        }
-
         if (shouldDispatchExternallyAfterShortCircuit(topic, key, value, headers)) {
 
             val producer = this.producer
             checkNotNull(producer) { "Producer is not initialized" }
             val record = ProducerRecord(topic, key, value)
-            headers.applyTo(record.headers())
+            record.headers().apply {
+                headers.headers.forEach { (key, value) ->
+                    add(key, value.toByteArray())
+                }
+            }
 
             // Asynchronously enqueue message
             producer.send(record) { metadata: RecordMetadata, ex: Exception? ->
@@ -96,14 +96,6 @@ class KafkaConnection(
         producer?.close()
         producer = null
         super.destroy()
-    }
-
-    override fun createHeaders(
-        targetServices: Set<String>,
-        targetInstances: Set<String>,
-        inReplyTo: MessageId?,
-    ): BrokerMessageHeaders {
-        return KafkaMessageHeaders(serviceName, instanceId, targetServices, targetInstances, inReplyTo, null)
     }
 
     override fun createTopic(topic: String) {
@@ -217,6 +209,12 @@ class KafkaConnection(
         log.debug("Consumer has been created")
     }
 
+    private fun handleIncomingRecord(topic: String, record: Record<String, String>) {
+        val headersMap = record.headers().associate { it.key() to String(it.value()) }
+        val headers = BrokerMessageHeaders(headersMap)
+        dispatchIncomingMessage(topic, record.key(), record.value(), headers)
+    }
+
     private fun createConnectionProperties(): Properties = Properties().apply {
         // Server(s) to connect to
         this[CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG] = kafkaHostsString
@@ -229,11 +227,6 @@ class KafkaConnection(
         this[CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG] = 10_000
         // Amount of times to retry a failed request
         this[CommonClientConfigs.RETRIES_CONFIG] = 10
-    }
-
-    private fun handleIncomingRecord(topic: String, record: Record<String, String>) {
-        val headers = KafkaMessageHeaders(record.headers())
-        dispatchIncomingMessage(topic, record.key(), record.value(), headers)
     }
 
 }

@@ -89,13 +89,12 @@ class ProducerSubclient<T>(
                 connection,
                 targetServices = services,
                 targetInstances = instances,
-                messageId = null,
             ),
         )
         return internalSend(msg)
     }
 
-    internal suspend fun internalSend(msg: BaseBrokerMessage<T>): MessageId {
+    internal suspend fun internalSend(msg: AbstractBrokerMessage<T>): MessageId {
         if (!isNullable) {
             requireNotNull(msg.value) {
                 "Cannot send null message for non-nullable type with key '$key' in topic '$topic'"
@@ -263,7 +262,7 @@ class RpcClient<RequestT, ResponseT>(
                 responseIsNullable,
             ) {
                 val msg = it.toRpcResponseMessage()
-                if (msg.inReplyTo != messageId.get()) {
+                if (msg.headers.inReplyTo != messageId.get()) {
                     return@consumer
                 }
                 send(msg)
