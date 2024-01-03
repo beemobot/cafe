@@ -36,6 +36,14 @@ class TestBrokerClient(
         return@rpc RpcStatus(1337) to null
     }
 
+    val exceptionRpc = rpc<Unit?, Unit?>(
+        topic = "exception",
+        key = "exception",
+    ) {
+        log.info("exceptionRpc received request: ${it.value}")
+        throw RpcException(RpcStatus(1337))
+    }
+
     val safeLongProducer = producer<Long>(
         topic = "long",
         key = "long",

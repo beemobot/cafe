@@ -91,11 +91,12 @@ class ProducerSubclient<T>(
                 targetInstances = instances,
             ),
         )
-        return internalSend(msg)
+        @Suppress("UNCHECKED_CAST")
+        return internalSend(msg as AbstractBrokerMessage<T?>)
     }
 
-    internal suspend fun internalSend(msg: AbstractBrokerMessage<T>): MessageId {
-        if (!isNullable) {
+    internal suspend fun internalSend(msg: AbstractBrokerMessage<T?>, bypassNullCheck: Boolean = false): MessageId {
+        if (!bypassNullCheck && !isNullable) {
             requireNotNull(msg.value) {
                 "Cannot send null message for non-nullable type with key '$key' in topic '$topic'"
             }
@@ -146,7 +147,8 @@ class ConsumerSubclient<T>(
         headers: BrokerMessageHeaders,
     ) = coroutineScope {
         val data = parseIncoming(value)
-        if (!isNullable) {
+        // Disable nullability enforcement for RPC exceptions. The caller has to deal with the unsafe typing now.
+        if (!isNullable && (headers !is RpcMessageHeaders || !headers.isException)) {
             checkNotNull(data) {
                 "Received null message for non-nullable type with key '$key' in topic '$topic'"
             }
@@ -199,7 +201,7 @@ class RpcClient<RequestT, ResponseT>(
             responseIsNullable,
         )
 
-        suspend fun sendResponse(response: ResponseT, status: RpcStatus, isUpdate: Boolean) {
+        suspend fun sendResponse(response: ResponseT?, status: RpcStatus, isException: Boolean, isUpdate: Boolean) {
             val responseMsg = RpcResponseMessage(
                 client.toResponseTopic(topic),
                 client.toResponseKey(key),
@@ -211,22 +213,27 @@ class RpcClient<RequestT, ResponseT>(
                     targetInstances = setOf(msg.headers.sourceInstance),
                     inReplyTo = msg.headers.messageId,
                     status,
+                    isException,
                     isUpdate,
                 ),
             )
-            responseProducer.internalSend(responseMsg)
+            responseProducer.internalSend(responseMsg, bypassNullCheck = isException)
         }
 
         val rpcMessage = msg.toRpcRequestMessage<ResponseT> { data, status ->
-            sendResponse(data, status, true)
+            sendResponse(data, status, isException = false, isUpdate = true)
         }
-        val (status, response) = try {
-            callback(rpcMessage)
+        try {
+            val (status, response) = callback(rpcMessage)
+            sendResponse(response, status, false, isUpdate = false)
         } catch (_: IgnoreRpcRequest) {
             return@consumer
+        } catch (ex: RpcException) {
+            sendResponse(null, ex.status, true, isUpdate = false)
+            return@consumer
+        } finally {
+            responseProducer.destroy()
         }
-        sendResponse(response, status, false)
-        responseProducer.destroy()
     }
 
     suspend fun call(
@@ -265,6 +272,10 @@ class RpcClient<RequestT, ResponseT>(
             ) {
                 val msg = it.toRpcResponseMessage()
                 if (msg.headers.inReplyTo != messageId.get()) {
+                    return@consumer
+                }
+                if (msg.headers.isException) {
+                    close(RpcException(msg.headers.status))
                     return@consumer
                 }
                 send(msg)
