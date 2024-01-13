@@ -220,7 +220,7 @@ class RpcClient<RequestT, ResponseT>(
             responseProducer.internalSend(responseMsg, bypassNullCheck = isException)
         }
 
-        val rpcMessage = msg.toRpcRequestMessage<ResponseT> { data, status ->
+        val rpcMessage = msg.toRpcRequestMessage<ResponseT> { status, data ->
             sendResponse(data, status, isException = false, isUpdate = true)
         }
         try {

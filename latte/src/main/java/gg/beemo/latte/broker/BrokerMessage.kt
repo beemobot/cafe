@@ -11,7 +11,7 @@ open class BrokerMessage<T, H : BrokerMessageHeaders>(
         get() = headers.messageId
 
     internal fun <ResponseT> toRpcRequestMessage(
-        updateSender: suspend (ResponseT, RpcStatus) -> Unit,
+        updateSender: suspend (RpcStatus, ResponseT) -> Unit,
     ): RpcRequestMessage<T, ResponseT, H> {
         return RpcRequestMessage(topic, key, value, headers, updateSender)
     }
@@ -32,11 +32,11 @@ class RpcRequestMessage<RequestT, ResponseT, H : BrokerMessageHeaders>(
     key: String,
     value: RequestT,
     headers: H,
-    private val updateSender: suspend (ResponseT, RpcStatus) -> Unit,
+    private val updateSender: suspend (RpcStatus, ResponseT) -> Unit,
 ) : BrokerMessage<RequestT, H>(topic, key, value, headers) {
 
-    suspend fun sendUpdate(response: ResponseT, status: RpcStatus) {
-        updateSender(response, status)
+    suspend fun sendUpdate(status: RpcStatus, response: ResponseT) {
+        updateSender(status, response)
     }
 
 }
