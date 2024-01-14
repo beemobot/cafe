@@ -31,7 +31,7 @@ abstract class BrokerClient(
         options: BrokerClientOptions = BrokerClientOptions(),
         noinline callback: suspend CoroutineScope.(BaseBrokerMessage<T>) -> Unit,
     ): ConsumerSubclient<T> {
-        return consumer(topic, key, options, T::class.java, null is T, callback)
+        return consumer(topic, key, options, T::class.java, isTypeNullable<T>(), callback)
     }
 
     @PublishedApi
@@ -54,7 +54,7 @@ abstract class BrokerClient(
         key: String,
         options: BrokerClientOptions = BrokerClientOptions(),
     ): ProducerSubclient<T> {
-        return producer(topic, key, options, T::class.java, null is T)
+        return producer(topic, key, options, T::class.java, isTypeNullable<T>())
     }
 
     @PublishedApi
@@ -83,9 +83,9 @@ abstract class BrokerClient(
             key,
             options,
             RequestT::class.java,
-            null is RequestT,
+            isTypeNullable<RequestT>(),
             ResponseT::class.java,
-            null is ResponseT,
+            isTypeNullable<ResponseT>(),
             callback,
         )
     }
@@ -177,4 +177,9 @@ abstract class BrokerClient(
         }
     }
 
+}
+
+@PublishedApi
+internal inline fun <reified T> isTypeNullable(): Boolean {
+    return null is T || T::class.java == Unit::class.java || T::class.java == Void::class.java
 }
