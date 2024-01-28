@@ -24,7 +24,6 @@ data class BrokerClientOptions(
     val useSafeJsLongs: Boolean = false,
 )
 
-// TODO Add error handling, some try-finally to close the producer/consumer even with errors
 sealed class BaseSubclient(
     protected val connection: BrokerConnection,
     protected val client: BrokerClient,
@@ -162,7 +161,16 @@ class ConsumerSubclient<T>(
             value,
         )
         @Suppress("UNCHECKED_CAST") // Safe due to above null validation
-        callback(message as BaseBrokerMessage<T>)
+        val brokerMessage = message as BaseBrokerMessage<T>
+        try {
+            callback(brokerMessage)
+        } catch (ex: Exception) {
+            log.error(
+                "Uncaught consumer callback error while processing message ${headers.messageId} " +
+                        "with key '$key' in topic '$topic'",
+                ex,
+            )
+        }
     }
 
     private fun parseIncoming(json: String): T? {
@@ -190,6 +198,8 @@ class RpcClient<RequestT, ResponseT>(
     key,
     options,
 ) {
+
+    private val log by Log
 
     private val requestProducer = client.producer(topic, key, options, requestType, requestIsNullable)
     private val requestConsumer = client.consumer(topic, key, options, requestType, requestIsNullable) { msg ->
@@ -230,6 +240,13 @@ class RpcClient<RequestT, ResponseT>(
             return@consumer
         } catch (ex: RpcException) {
             sendResponse(null, ex.status, true, isUpdate = false)
+            return@consumer
+        } catch (ex: Exception) {
+            log.error(
+                "Uncaught RPC callback error while processing message ${msg.headers.messageId} " +
+                        "with key '$key' in topic '$topic'",
+                ex,
+            )
             return@consumer
         } finally {
             responseProducer.destroy()
@@ -274,6 +291,7 @@ class RpcClient<RequestT, ResponseT>(
                 if (msg.headers.inReplyTo != messageId.get()) {
                     return@consumer
                 }
+                // Close the flow if we receive an exception
                 if (msg.headers.isException) {
                     close(RpcException(msg.headers.status))
                     return@consumer

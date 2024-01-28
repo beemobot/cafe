@@ -7,7 +7,7 @@ import org.junit.jupiter.api.assertThrows
 
 class BrokerClientTest {
 
-    private val connection = LocalConnection()
+    private val connection = LocalConnection("service", "instance")
 
     @Test
     fun `test greeting RPC`() = withTestClient { client ->
