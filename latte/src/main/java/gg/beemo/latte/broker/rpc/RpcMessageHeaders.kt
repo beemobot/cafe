@@ -1,4 +1,9 @@
-package gg.beemo.latte.broker
+package gg.beemo.latte.broker.rpc
+
+import gg.beemo.latte.broker.BrokerConnection
+import gg.beemo.latte.broker.BrokerMessageHeaders
+import gg.beemo.latte.broker.MessageId
+import gg.beemo.latte.broker.getOrThrow
 
 class RpcMessageHeaders(headers: Map<String, String>) : BrokerMessageHeaders(headers) {
 

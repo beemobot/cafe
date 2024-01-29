@@ -1,4 +1,4 @@
-package gg.beemo.latte.broker
+package gg.beemo.latte.broker.rpc
 
 class RpcStatus(val code: Int) {
 

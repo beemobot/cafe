@@ -1,6 +1,7 @@
 package gg.beemo.latte.broker
 
 import com.squareup.moshi.JsonClass
+import gg.beemo.latte.broker.rpc.RpcStatus
 import gg.beemo.latte.logging.Log
 import kotlinx.coroutines.CoroutineScope
 import org.junit.jupiter.api.Assertions

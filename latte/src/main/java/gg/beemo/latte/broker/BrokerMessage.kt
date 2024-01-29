@@ -1,5 +1,10 @@
 package gg.beemo.latte.broker
 
+import gg.beemo.latte.broker.rpc.RpcMessageHeaders
+import gg.beemo.latte.broker.rpc.RpcRequestMessage
+import gg.beemo.latte.broker.rpc.RpcResponseMessage
+import gg.beemo.latte.broker.rpc.RpcStatus
+
 open class BrokerMessage<T, H : BrokerMessageHeaders>(
     val topic: String,
     val key: String,
@@ -24,26 +29,3 @@ open class BrokerMessage<T, H : BrokerMessageHeaders>(
 
 typealias AbstractBrokerMessage<T> = BrokerMessage<T, out BrokerMessageHeaders>
 typealias BaseBrokerMessage<T> = BrokerMessage<T, BrokerMessageHeaders>
-typealias BaseRpcRequestMessage<RequestT, ResponseT> = RpcRequestMessage<RequestT, ResponseT, BrokerMessageHeaders>
-
-class RpcRequestMessage<RequestT, ResponseT, H : BrokerMessageHeaders>(
-    topic: String,
-    key: String,
-    value: RequestT,
-    headers: H,
-    private val updateSender: suspend (RpcStatus, ResponseT) -> Unit,
-) : BrokerMessage<RequestT, H>(topic, key, value, headers) {
-
-    suspend fun sendUpdate(status: RpcStatus, response: ResponseT) {
-        updateSender(status, response)
-    }
-
-}
-
-class RpcResponseMessage<ResponseT>(topic: String, key: String, value: ResponseT, headers: RpcMessageHeaders) :
-    BrokerMessage<ResponseT, RpcMessageHeaders>(topic, key, value, headers) {
-
-    val status: RpcStatus
-        get() = headers.status
-
-}

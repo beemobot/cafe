@@ -1,5 +1,6 @@
 package gg.beemo.latte.broker
 
+import gg.beemo.latte.broker.rpc.RpcStatus
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.Test
