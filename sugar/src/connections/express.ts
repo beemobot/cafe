@@ -13,7 +13,7 @@ export function initExpressServer() {
     const password = process.env.BASIC_AUTH_PASSWORD
 
     if (username == null || password == null) {
-        Logger.error(TAG, 'Basic authentication is not configured, it must be configured for authentication purposes.')
+        Logger.error(TAG, 'Basic authentication is not configured. It must be configured for authentication purposes.')
         process.exit()
     }
 
@@ -21,7 +21,7 @@ export function initExpressServer() {
     account[username] = password
 
     if (process.env.SERVER_PORT == null) {
-        Logger.error(TAG, 'SERVER_PORT is a required configuration, and must be configured to start the HTTP server.')
+        Logger.error(TAG, 'SERVER_PORT is a required configuration and must be configured to start the HTTP server.')
         process.exit()
     }
 
