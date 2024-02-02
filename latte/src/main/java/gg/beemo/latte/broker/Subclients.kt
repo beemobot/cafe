@@ -91,15 +91,15 @@ class ProducerSubclient<T>(
                 "Cannot send null message for non-nullable type with key '$key' in topic '$topic'"
             }
         }
-        val strigifiedData = stringifyOutgoing(msg.value)
+        val stringifiedData = stringifyOutgoing(msg.value)
         log.trace(
             "Sending message {} with key '{}' in topic '{}' with value: {}",
             msg.messageId,
             key,
             topic,
-            strigifiedData,
+            stringifiedData,
         )
-        return connection.send(topic, key, strigifiedData, msg.headers)
+        return connection.send(topic, key, stringifiedData, msg.headers)
     }
 
     private fun stringifyOutgoing(data: T?): String {
