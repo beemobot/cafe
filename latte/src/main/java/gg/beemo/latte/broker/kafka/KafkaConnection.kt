@@ -1,16 +1,18 @@
 package gg.beemo.latte.broker.kafka
 
-import gg.beemo.latte.broker.BaseBrokerMessageHeaders
+import gg.beemo.latte.broker.BrokerMessageHeaders
 import gg.beemo.latte.broker.BrokerConnection
-import gg.beemo.latte.broker.TopicListener
-import gg.beemo.latte.logging.log
-import kotlinx.coroutines.*
+import gg.beemo.latte.broker.MessageId
+import gg.beemo.latte.logging.Log
+import kotlinx.coroutines.future.await
+import kotlinx.coroutines.runBlocking
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin.AdminClient
 import org.apache.kafka.clients.admin.NewTopic
 import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.clients.producer.ProducerConfig
 import org.apache.kafka.clients.producer.ProducerRecord
+import org.apache.kafka.clients.producer.RecordMetadata
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.serialization.Serdes
 import org.apache.kafka.common.serialization.StringSerializer
@@ -21,112 +23,111 @@ import org.apache.kafka.streams.errors.MissingSourceTopicException
 import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler
 import org.apache.kafka.streams.processor.api.ProcessorSupplier
 import org.apache.kafka.streams.processor.api.Record
-import java.lang.IllegalArgumentException
 import java.util.*
 
 
 class KafkaConnection(
     kafkaHosts: Array<String>,
-    override val clientId: String,
-    private val consumerGroupId: String,
-    override val clusterId: String,
+    override val serviceName: String,
+    override val instanceId: String,
     private val useTls: Boolean = false,
+    private val partitionCount: Int = 1,
+    private val replicationFactor: Short = 1,
 ) : BrokerConnection() {
 
+    override val supportsTopicHotSwap = false
     private val kafkaHostsString = kafkaHosts.joinToString(",")
+    private val log by Log
 
     private var producer: KafkaProducer<String, String>? = null
     private var consumer: KafkaStreams? = null
-    private var shutdownHook: Thread? = null
 
     private val isRunning: Boolean
-        // The `shutdownHook` is assigned a value as the last step of `start()`
-        get() = shutdownHook != null
+        get() = producer != null && consumer != null
 
-    override suspend fun send(
+    override suspend fun abstractSend(
         topic: String,
         key: String,
         value: String,
-        headers: BaseBrokerMessageHeaders,
-        blocking: Boolean,
-    ): String {
-        if (headers !is KafkaMessageHeaders) {
-            throw IllegalArgumentException("KafkaConnection requires headers of type KafkaMessageHeaders to be passed, got ${headers.javaClass.name} instead")
-        }
-
+        headers: BrokerMessageHeaders,
+    ): MessageId {
         if (shouldDispatchExternallyAfterShortCircuit(topic, key, value, headers)) {
 
-            val producer = this.producer ?: throw IllegalStateException("Producer is not initialized")
+            val producer = this.producer
+            checkNotNull(producer) { "Producer is not initialized" }
             val record = ProducerRecord(topic, key, value)
-            headers.applyTo(record.headers())
-
-            if (blocking) {
-                withContext(Dispatchers.IO) {
-                    // This can block for up to max.block.ms while gathering metadata.
-                    // The request itself will be sent async, once the metadata is fetched.
-                    producer.send(record).get()
+            record.headers().apply {
+                headers.headers.forEach { (key, value) ->
+                    add(key, value.toByteArray())
                 }
-            } else {
-                // When no blocking is requested, just throw the message into the void and hope for the best.
-                producer.send(record)
+            }
+
+            // Asynchronously enqueue message
+            producer.send(record) { metadata: RecordMetadata, ex: Exception? ->
+                if (ex != null) {
+                    log.error("Error enqueueing Kafka message", ex)
+                } else {
+                    log.trace(
+                        "Enqueued message {} with key {} into topic {} at offset {}",
+                        headers.messageId,
+                        key,
+                        metadata.topic(),
+                        metadata.offset(),
+                    )
+                }
             }
         }
 
-        return headers.requestId
+        return headers.messageId
     }
 
-    override fun start() {
+    override suspend fun start() {
         check(!isRunning) { "KafkaConnection is already running!" }
         log.debug("Starting Kafka Connection")
         createTopics()
         createProducer()
         createConsumer()
-
-        shutdownHook = Thread({
-            shutdownHook = null
-            destroy()
-        }, "Kafka Connection ($consumerGroupId) Shutdown Hook")
-        Runtime.getRuntime().addShutdownHook(shutdownHook)
         log.debug("Kafka Connection is fully initialized")
     }
 
     override fun destroy() {
-        super.destroy()
         consumer?.close()
         consumer = null
         producer?.close()
         producer = null
-        shutdownHook?.let { Runtime.getRuntime().removeShutdownHook(it) }
-        shutdownHook = null
+        super.destroy()
     }
 
-    override fun createHeaders(targetClusters: Set<String>?, requestId: String?): BaseBrokerMessageHeaders {
-        return KafkaMessageHeaders(this.clientId, this.clusterId, targetClusters, requestId)
+    override fun createTopic(topic: String) {
+        checkRunningTopicsModification(topic)
     }
 
-    override fun on(topic: String, cb: TopicListener) {
+    override fun removeTopic(topic: String) {
+        checkRunningTopicsModification(topic)
+    }
+
+    private fun checkRunningTopicsModification(topic: String) {
         if (!topicListeners.containsKey(topic) && isRunning) {
             // NOTE: It might be possible to recreate and reconnect the stream with new topics,
             //       but at this point it's not worth the effort, given this kind of dynamic topic
             //       addition doesn't happen in practice.
             throw IllegalStateException("Cannot subscribe to new topic after KafkaConnection has started")
         }
-        super.on(topic, cb)
     }
 
-    private fun createTopics() {
+    private suspend fun createTopics() {
         val listeningTopics = topicListeners.keys
-        log.debug("Creating missing topics, target topics: $listeningTopics")
+        log.debug("Creating missing topics, target topics: {}", listeningTopics)
         val props = createConnectionProperties()
         val client = AdminClient.create(props)
 
         val existingTopics = client.listTopics().names().get()
         val missingTopics = listeningTopics.filter { !existingTopics.contains(it) }
-        log.debug("Missing topics: $missingTopics")
+        log.debug("Missing topics: {}", missingTopics)
         if (missingTopics.isNotEmpty()) {
             client.createTopics(
-                missingTopics.map { NewTopic(it, 1, 1) }
-            ).all().get()
+                missingTopics.map { NewTopic(it, partitionCount, replicationFactor) }
+            ).all().toCompletionStage().await()
         }
         log.debug("Created all missing topics")
     }
@@ -164,7 +165,7 @@ class KafkaConnection(
         props[StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG] = Serdes.String().javaClass
         props[StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG] = Serdes.String().javaClass
         // Name of this client for group management
-        props[StreamsConfig.APPLICATION_ID_CONFIG] = consumerGroupId
+        props[StreamsConfig.APPLICATION_ID_CONFIG] = instanceId
         // Max time a task may stall and retry due to errors
         props[StreamsConfig.TASK_TIMEOUT_MS_CONFIG] = 5_000
         // "Note that exactly-once processing requires a cluster of at least three brokers by default"
@@ -191,10 +192,10 @@ class KafkaConnection(
                 if (ex is MissingSourceTopicException) {
                     log.info("Got MissingSourceTopicException in Consumer, trying to re-create missing topics")
                     try {
-                        synchronized(::createTopics) {
+                        runBlocking {
                             createTopics()
                         }
-                    } catch (t: Throwable) {
+                    } catch (t: Exception) {
                         log.error(
                             "Error in KafkaStreams: Got MissingSourceTopicException but couldn't re-create topics",
                             t
@@ -208,6 +209,12 @@ class KafkaConnection(
         log.debug("Consumer has been created")
     }
 
+    private fun handleIncomingRecord(topic: String, record: Record<String, String>) {
+        val headersMap = record.headers().associate { it.key() to String(it.value()) }
+        val headers = BrokerMessageHeaders(headersMap)
+        dispatchIncomingMessage(topic, record.key(), record.value(), headers)
+    }
+
     private fun createConnectionProperties(): Properties = Properties().apply {
         // Server(s) to connect to
         this[CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG] = kafkaHostsString
@@ -215,16 +222,11 @@ class KafkaConnection(
         this[CommonClientConfigs.SECURITY_PROTOCOL_CONFIG] =
             if (useTls) SecurityProtocol.SSL.name else SecurityProtocol.PLAINTEXT.name
         // Readable name of this client for debugging purposes
-        this[CommonClientConfigs.CLIENT_ID_CONFIG] = consumerGroupId
+        this[CommonClientConfigs.CLIENT_ID_CONFIG] = instanceId
         // Max time for the server to respond to a request
         this[CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG] = 10_000
         // Amount of times to retry a failed request
         this[CommonClientConfigs.RETRIES_CONFIG] = 10
-    }
-
-    private fun handleIncomingRecord(topic: String, record: Record<String, String>) {
-        val headers = KafkaMessageHeaders(record.headers())
-        handleIncomingMessage(topic, record.key(), record.value(), headers)
     }
 
 }

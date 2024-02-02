@@ -1,31 +1,45 @@
 package gg.beemo.latte.broker
 
 class LocalConnection(
-    override val clusterId: String = "local-cluster-id",
+    override val serviceName: String,
+    override val instanceId: String,
 ) : BrokerConnection() {
 
-    override val clientId = "local-client-id"
+    override val supportsTopicHotSwap = true
 
-    override suspend fun send(
+    override suspend fun abstractSend(
         topic: String,
         key: String,
         value: String,
-        headers: BaseBrokerMessageHeaders,
-        blocking: Boolean,
-    ): String {
-        if (shouldDispatchExternallyAfterShortCircuit(topic, key, value, headers) && headers.targetClusters.isNotEmpty()) {
-            throw IllegalArgumentException("Attempting to send message to other cluster(s) ${headers.targetClusters} in a LocalConnection")
+        headers: BrokerMessageHeaders,
+    ): MessageId {
+        if (shouldDispatchExternallyAfterShortCircuit(topic, key, value, headers)) {
+            val isForExternalService =
+                headers.targetServices.isNotEmpty() && headers.targetServices != setOf(serviceName)
+            val isForExternalInstance =
+                headers.targetInstances.isNotEmpty() && headers.targetInstances != setOf(instanceId)
+            if (isForExternalService || isForExternalInstance) {
+                throw IllegalArgumentException(
+                    "Attempting to send message to other services/instances " +
+                            "(services=${headers.targetServices}; instances=${headers.targetInstances}) " +
+                            "in a LocalConnection"
+                )
+            }
         }
 
-        return headers.requestId
+        return headers.messageId
     }
 
-    override fun start() {
+    override suspend fun start() {
         // Nothing to start :)
     }
 
-    override fun createHeaders(targetClusters: Set<String>?, requestId: String?): BaseBrokerMessageHeaders {
-        return BaseBrokerMessageHeaders(this.clientId, this.clusterId, targetClusters, requestId)
+    override fun createTopic(topic: String) {
+        // noop
+    }
+
+    override fun removeTopic(topic: String) {
+        // noop
     }
 
 }

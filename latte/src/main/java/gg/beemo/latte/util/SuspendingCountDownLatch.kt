@@ -1,7 +1,8 @@
 package gg.beemo.latte.util
 
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.onSuccess
+import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.time.Duration
@@ -17,14 +18,14 @@ class SuspendingCountDownLatch(initialCount: Int) {
 
     fun getCount(): Int = counter.get()
 
-    suspend fun countDown() {
+    fun countDown() {
         val newValue = counter.decrementAndGet()
-        @OptIn(ExperimentalCoroutinesApi::class)
-        if (newValue != 0 || channel.isClosedForSend) {
+        if (newValue != 0) {
             return
         }
-        channel.send(Unit)
-        channel.close()
+        channel.trySend(Unit).onSuccess {
+            channel.close()
+        }
     }
 
     suspend fun await() {
@@ -39,5 +40,13 @@ class SuspendingCountDownLatch(initialCount: Int) {
         }
         true
     } ?: false
+
+    suspend fun awaitThrowing(waitTime: Duration) = withTimeout(waitTime) {
+        try {
+            channel.receive()
+        } finally {
+            channel.close()
+        }
+    }
 
 }
