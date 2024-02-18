@@ -1,8 +1,8 @@
 import type { Consumer, KafkaMessage, Producer } from "kafkajs";
 import { Kafka, logLevel } from "kafkajs";
 import { Logger } from "../../logging/Logger.js";
-import type { IBrokerConnection, BrokerTopicListener } from "../IBrokerConnection.js";
-import type { IBrokerMessageHeaders } from "../IBrokerMessageHeaders.js";
+import type { IBrokerConnection, TopicListener } from "../BrokerConnection.js";
+import type { IBrokerMessageHeaders } from "../BrokerMessageHeaders.js";
 import { KafkaMessageHeaders } from "./KafkaMessageHeaders.js";
 
 const TAG = "KafkaConnection";
@@ -14,7 +14,7 @@ export class KafkaConnection implements IBrokerConnection {
 
 	private readonly subscribedTopics: Set<string> = new Set();
 
-	private readonly topicListeners: Map<string, Set<BrokerTopicListener>> = new Map();
+	private readonly topicListeners: Map<string, Set<TopicListener>> = new Map();
 	private isRunning: boolean = false;
 
 	public constructor(
@@ -83,7 +83,7 @@ export class KafkaConnection implements IBrokerConnection {
 		return new KafkaMessageHeaders(this.clientId, this.clusterId, targetClusters, requestId);
 	}
 
-	public on(topic: string, cb: BrokerTopicListener): void {
+	public on(topic: string, cb: TopicListener): void {
 		let listeners = this.topicListeners.get(topic);
 		if (!listeners) {
 			if (this.isRunning) {
@@ -96,7 +96,7 @@ export class KafkaConnection implements IBrokerConnection {
 		listeners.add(cb);
 	}
 
-	public off(topic: string, cb: BrokerTopicListener): void {
+	public off(topic: string, cb: TopicListener): void {
 		const listeners = this.topicListeners.get(topic);
 		if (listeners) {
 			listeners.delete(cb);

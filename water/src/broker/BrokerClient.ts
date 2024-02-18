@@ -1,7 +1,7 @@
 import { Logger } from "../logging/Logger.js";
 import { CountDownLatch } from "../util/CountDownLatch.js";
-import type { IBrokerConnection } from "./IBrokerConnection.js";
-import type { IBrokerMessageHeaders } from "./IBrokerMessageHeaders.js";
+import type { IBrokerConnection } from "./BrokerConnection.js";
+import type { IBrokerMessageHeaders } from "./BrokerMessageHeaders.js";
 import { BrokerMessage } from "./BrokerMessage.js";
 
 const TAG = "BrokerClient";
