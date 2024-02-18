@@ -1,5 +1,5 @@
 import type { BrokerClient } from "./BrokerClient.js";
-import type { IBrokerMessageHeaders } from "./IBrokerMessageHeaders.js";
+import type { IBrokerMessageHeaders } from "./BrokerMessageHeaders.js";
 
 export class BrokerMessage<T> {
 	public constructor(

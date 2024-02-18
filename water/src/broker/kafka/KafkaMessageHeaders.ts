@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { IHeaders } from "kafkajs";
-import type { IBrokerMessageHeaders } from "../IBrokerMessageHeaders.js";
-import { BROKER_HEADERS } from "../IBrokerMessageHeaders.js";
+import type { IBrokerMessageHeaders } from "../BrokerMessageHeaders.js";
+import { BROKER_HEADERS } from "../BrokerMessageHeaders.js";
 
 export class KafkaMessageHeaders implements IBrokerMessageHeaders {
 	public static readonly INVALID_CLUSTER_ID = `${-Math.pow(2, 32)}`;

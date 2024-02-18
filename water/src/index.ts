@@ -1,7 +1,9 @@
+export * from "./CommonConfig.js";
+
 export * from "./broker/BrokerClient.js";
 export * from "./broker/BrokerMessage.js";
-export * from "./broker/IBrokerConnection.js";
-export * from "./broker/IBrokerMessageHeaders.js";
+export * from "./broker/BrokerConnection.js";
+export * from "./broker/BrokerMessageHeaders.js";
 export * from "./broker/kafka/KafkaConnection.js";
 export * from "./broker/kafka/KafkaMessageHeaders.js";
 
