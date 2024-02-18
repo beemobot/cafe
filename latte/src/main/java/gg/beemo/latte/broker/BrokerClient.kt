@@ -6,18 +6,8 @@ import gg.beemo.latte.broker.rpc.RpcResponse
 import gg.beemo.latte.logging.Log
 import kotlinx.coroutines.*
 import java.util.Collections
+import java.util.concurrent.atomic.AtomicBoolean
 
-private class TopicMetadata(
-    val topic: String,
-    val keys: MutableMap<String, KeyMetadata>,
-    var connectionListener: TopicListener? = null,
-)
-
-private class KeyMetadata(
-    val topic: TopicMetadata,
-    val producers: MutableSet<ProducerSubclient<*>>,
-    val consumers: MutableSet<ConsumerSubclient<*>>,
-)
 
 abstract class BrokerClient(
     @PublishedApi
@@ -48,7 +38,7 @@ abstract class BrokerClient(
     ): ConsumerSubclient<T> {
         log.debug("Creating consumer for key '{}' in topic '{}' with type {}", key, topic, type.name)
         return ConsumerSubclient(connection, this, topic, key, options, type, isNullable, callback).also {
-            registerConsumer(it)
+            registerSubclient(it)
         }
     }
 
@@ -70,7 +60,7 @@ abstract class BrokerClient(
     ): ProducerSubclient<T> {
         log.debug("Creating producer for key '{}' in topic '{}' with type {}", key, topic, type.name)
         return ProducerSubclient(connection, this, topic, key, options, type, isNullable).also {
-            registerProducer(it)
+            registerSubclient(it)
         }
     }
 
@@ -93,68 +83,35 @@ abstract class BrokerClient(
         )
     }
 
+    private fun registerSubclient(subclient: BaseSubclient) {
+        val topic = subclient.topic
+        val metadata = topics.computeIfAbsent(topic) {
+            TopicMetadata(connection, consumerScope, topic)
+        }
+        metadata.registerSubclient(subclient)
+    }
+
+    internal fun deregisterSubclient(subclient: BaseSubclient) {
+        val topic = subclient.topic
+        topics[topic]?.let {
+            it.deregisterSubclient(subclient)
+            if (it.isEmpty) {
+                it.destroy()
+                topics.remove(topic)
+            }
+        }
+    }
+
     fun destroy(cancelScope: Boolean = true) {
-        val producers = topics.values.flatMap { metadata -> metadata.keys.values.flatMap { it.producers } }
-        val consumers = topics.values.flatMap { metadata -> metadata.keys.values.flatMap { it.consumers } }
-        producers.forEach {
-            it.destroy()
+        log.debug("Destroying BrokerClient of type {} with active topics {}", javaClass.simpleName, topics.keys)
+        while (topics.isNotEmpty()) {
+            val topic = topics.keys.first()
+            topics[topic]?.destroy()
+            topics.remove(topic)
         }
-        consumers.forEach {
-            it.destroy()
-        }
-        topics.clear()
         if (cancelScope) {
             consumerScope.cancel()
         }
-    }
-
-    private fun registerProducer(producer: ProducerSubclient<*>) {
-        val metadata = getOrCreateKeyMetadata(producer.topic, producer.key)
-        metadata.producers.add(producer)
-    }
-
-    private fun registerConsumer(consumer: ConsumerSubclient<*>) {
-        val metadata = getOrCreateKeyMetadata(consumer.topic, consumer.key)
-        if (metadata.consumers.isEmpty() && metadata.topic.connectionListener == null) {
-            // New consumer - create a new connection listener for this topic
-            val listener = TopicListener { topic, key, value, headers ->
-                onTopicMessage(topic, key, value, headers)
-            }
-            connection.on(consumer.topic, listener)
-            metadata.topic.connectionListener = listener
-        }
-        metadata.consumers.add(consumer)
-    }
-
-    internal fun deregisterProducer(producer: ProducerSubclient<*>) {
-        log.debug("Removing producer for key '{}' in topic '{}'", producer.key, producer.topic)
-        val metadata = getExistingKeyMetadata(producer.topic, producer.key)
-        metadata?.producers?.remove(producer)
-    }
-
-    internal fun deregisterConsumer(consumer: ConsumerSubclient<*>) {
-        log.debug("Removing consumer for key '{}' in topic '{}'", consumer.key, consumer.topic)
-        val metadata = getExistingKeyMetadata(consumer.topic, consumer.key)
-        if (metadata?.consumers?.remove(consumer) == true && metadata.consumers.isEmpty()) {
-            metadata.topic.connectionListener?.let {
-                connection.off(metadata.topic.topic, it)
-                metadata.topic.connectionListener = null
-            }
-        }
-    }
-
-    private fun getOrCreateKeyMetadata(topic: String, key: String): KeyMetadata {
-        val topicData = topics.computeIfAbsent(topic) {
-            TopicMetadata(topic, Collections.synchronizedMap(HashMap()))
-        }
-        val keyData = topicData.keys.computeIfAbsent(key) {
-            KeyMetadata(topicData, Collections.synchronizedSet(HashSet()), Collections.synchronizedSet(HashSet()))
-        }
-        return keyData
-    }
-
-    private fun getExistingKeyMetadata(topic: String, key: String): KeyMetadata? {
-        return topics[topic]?.keys?.get(key)
     }
 
     internal fun toResponseTopic(topic: String): String =
@@ -162,13 +119,113 @@ abstract class BrokerClient(
 
     internal fun toResponseKey(key: String): String = "$key.response"
 
+}
+
+private class TopicMetadata(
+    private val connection: BrokerConnection,
+    private val consumerScope: CoroutineScope,
+    private val topic: String,
+) {
+
+    private class KeyMetadata(val key: String) {
+        val producers: MutableSet<ProducerSubclient<*>> = Collections.synchronizedSet(HashSet())
+        val consumers: MutableSet<ConsumerSubclient<*>> = Collections.synchronizedSet(HashSet())
+
+        val isEmpty: Boolean
+            get() = producers.isEmpty() && consumers.isEmpty()
+
+        fun destroy() {
+            producers.forEach(ProducerSubclient<*>::destroy)
+            consumers.forEach(ConsumerSubclient<*>::destroy)
+            producers.clear()
+            consumers.clear()
+        }
+    }
+
+    private val log by Log
+    private val _keys: MutableMap<String, KeyMetadata> = Collections.synchronizedMap(HashMap())
+    private val isBeingDestroyed = AtomicBoolean(false)
+    val isEmpty: Boolean
+        get() = _keys.isEmpty()
+
+    @Volatile
+    private var connectionListener: TopicListener? = null
+
+    fun registerSubclient(subclient: BaseSubclient) {
+        log.debug(
+            "Adding {} for key '{}' in topic '{}'",
+            subclient.javaClass.simpleName,
+            subclient.key,
+            subclient.topic
+        )
+        val metadata = getOrCreateKeyMetadata(subclient.key)
+        when (subclient) {
+            is ConsumerSubclient<*> -> {
+                if (metadata.consumers.isEmpty() && connectionListener == null) {
+                    log.debug("Creating new connection listener for topic '{}'", subclient.topic)
+                    // New consumer - create a new connection listener for this topic
+                    val listener = TopicListener { topic, key, value, headers ->
+                        onTopicMessage(topic, key, value, headers)
+                    }
+                    connection.on(subclient.topic, listener)
+                    connectionListener = listener
+                }
+                metadata.consumers.add(subclient)
+            }
+
+            is ProducerSubclient<*> -> {
+                metadata.producers.add(subclient)
+            }
+        }
+    }
+
+    fun deregisterSubclient(subclient: BaseSubclient) {
+        log.debug(
+            "Removing {} for key '{}' in topic '{}'",
+            subclient.javaClass.simpleName,
+            subclient.key,
+            subclient.topic
+        )
+        val metadata = getExistingKeyMetadata(subclient.key)
+        metadata?.let {
+            when (subclient) {
+                is ConsumerSubclient<*> -> it.consumers.remove(subclient)
+                is ProducerSubclient<*> -> it.producers.remove(subclient)
+            }
+            maybeCleanupKeyMetadata(it)
+        }
+    }
+
+    private fun maybeCleanupKeyMetadata(keyMetadata: KeyMetadata) {
+        if (keyMetadata.isEmpty) {
+            _keys.remove(keyMetadata.key)
+        }
+        if (this.isEmpty) {
+            connectionListener?.let {
+                log.debug("Removing connection listener for topic '{}' after key cleanup", topic)
+                connection.off(topic, it)
+                connectionListener = null
+            }
+        }
+    }
+
+    private fun getOrCreateKeyMetadata(key: String): KeyMetadata {
+        return _keys.computeIfAbsent(key) {
+            KeyMetadata(key)
+        }
+    }
+
+    private fun getExistingKeyMetadata(key: String): KeyMetadata? {
+        return _keys[key]
+    }
+
     private fun onTopicMessage(
         topic: String,
         key: String,
         value: String,
         headers: BrokerMessageHeaders,
     ) {
-        val metadata = getExistingKeyMetadata(topic, key) ?: return
+        val metadata = getExistingKeyMetadata(key) ?: return
         for (consumer in metadata.consumers) {
             consumerScope.launch {
                 try {
@@ -177,6 +234,22 @@ abstract class BrokerClient(
                     log.error("Uncaught error in BrokerClient listener for key '$key' in topic '$topic'", e)
                 }
             }
+        }
+    }
+
+    fun destroy() {
+        if (!isBeingDestroyed.compareAndSet(false, true)) {
+            return
+        }
+        while (_keys.isNotEmpty()) {
+            val key = _keys.keys.first()
+            _keys[key]?.destroy()
+            _keys.remove(key)
+        }
+        connectionListener?.let {
+            log.debug("Removing connection listener for topic '{}' in destroy()", topic)
+            connection.off(topic, it)
+            connectionListener = null
         }
     }
 

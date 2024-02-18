@@ -10,6 +10,7 @@ import gg.beemo.latte.util.MoshiUnitAdapter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.coroutineScope
 import java.time.Instant
+import java.util.concurrent.atomic.AtomicBoolean
 
 data class BrokerClientOptions(
     val useSafeJsLongs: Boolean = false,
@@ -23,7 +24,16 @@ abstract class BaseSubclient(
     protected val options: BrokerClientOptions,
 ) {
 
-    internal abstract fun destroy()
+    private val log by Log
+    private val isBeingDestroyed = AtomicBoolean(false)
+
+    internal fun destroy() {
+        if (isBeingDestroyed.compareAndSet(false, true)) {
+            doDestroy()
+        }
+    }
+
+    protected abstract fun doDestroy()
 
     protected fun <T> createMoshiAdapter(type: Class<T>): JsonAdapter<T?> {
         val mochi = if (options.useSafeJsLongs) safeJsMoshi else baseMoshi
@@ -62,8 +72,8 @@ class ProducerSubclient<T>(
     private val log by Log
     private val adapter: JsonAdapter<T?> = createMoshiAdapter(requestType)
 
-    override fun destroy() {
-        client.deregisterProducer(this)
+    override fun doDestroy() {
+        client.deregisterSubclient(this)
     }
 
     suspend fun send(
@@ -128,8 +138,8 @@ class ConsumerSubclient<T>(
     private val log by Log
     private val adapter: JsonAdapter<T?> = createMoshiAdapter(incomingType)
 
-    override fun destroy() {
-        client.deregisterConsumer(this)
+    override fun doDestroy() {
+        client.deregisterSubclient(this)
     }
 
     internal suspend fun onIncomingMessage(

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<Configuration status="INFO">
+<Configuration status="INFO" shutdownHook="disable">
     <Properties>
         <Property name="PATTERN">%d{yyyy-MM-dd HH:mm:ss.SSS} %highlight{%-5level}{FATAL=bg_bright_red, ERROR=bright_red, WARN=bright_yellow, INFO=bright_green, DEBUG=bright_cyan, TRACE=bright_white} [%style{%t}{bright_white}] %style{%logger{36}}{white}: %msg%n%ex</Property>
     </Properties>

@@ -4,7 +4,9 @@ import gg.beemo.latte.CommonConfig
 import gg.beemo.latte.broker.kafka.KafkaConnection
 import gg.beemo.latte.config.Configurator
 import gg.beemo.latte.logging.Log
+import gg.beemo.latte.logging.log
 import kotlinx.coroutines.runBlocking
+import org.apache.logging.log4j.LogManager
 
 object Vanilla {
 
@@ -25,7 +27,14 @@ object Vanilla {
         )
 
         log.debug("Initializing Kafka Ratelimit client")
-        RatelimitClient(brokerConnection)
+        val ratelimitClient = RatelimitClient(brokerConnection)
+
+        Runtime.getRuntime().addShutdownHook(Thread({
+            log.info("Destroying everything")
+            ratelimitClient.destroy()
+            brokerConnection.destroy()
+            LogManager.shutdown(true, true)
+        }, "Vanilla Shutdown Hook"))
 
         log.debug("Starting Kafka connection")
         brokerConnection.start()

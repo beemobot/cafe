@@ -21,6 +21,7 @@ abstract class BrokerConnection {
 
     abstract suspend fun start()
     open fun destroy() {
+        log.debug("Destroying BrokerConnection")
         topicListeners.clear()
     }
 
