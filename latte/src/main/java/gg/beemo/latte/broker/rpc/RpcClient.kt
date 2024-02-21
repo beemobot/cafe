@@ -158,7 +158,7 @@ class RpcClient<RequestT, ResponseT>(
 
     }
 
-    override fun destroy() {
+    override fun doDestroy() {
         requestProducer.destroy()
         requestConsumer.destroy()
     }

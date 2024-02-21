@@ -91,6 +91,7 @@ class KafkaConnection(
     }
 
     override fun destroy() {
+        log.debug("Destroying KafkaConnection")
         consumer?.close()
         consumer = null
         producer?.close()
