@@ -1,32 +1,37 @@
-import {PrismaClient} from "@prisma/client";
 import dotenv from 'dotenv'
-import {Sentryboo} from "./connections/sentry.js";
-import {Koffaka} from "./connections/kafka.js";
-import {Prismae} from "./connections/prisma.js";
+import {initializeSentry, logIssue} from "./connections/sentry.js";
+import {initializeKafka} from "./connections/kafka.js";
+import {initializePrisma, prisma} from "./connections/prisma.js";
 import {Logger} from "@beemobot/common";
 // ^ This needs to be updated; Probably @beemobot/cafe
-import {Fastified} from "./connections/fastify.js";
+import {initializeFastify} from "./connections/fastify.js";
 import * as Sentry from '@sentry/node'
+import {TAG} from "./constants/logging.js";
 
 dotenv.config()
 
-export let prisma = new PrismaClient()
-export const TAG = "Milk"
-export const CONFIGURATION = {
-    WRITES_ENABLED: process.env.WRITES_ENABLED?.toLowerCase() === 'true',
-    READS_ENABLED: process.env.READS_ENABLED?.toLowerCase() === 'true'
-}
 async function main() {
-    Sentryboo.init()
-    await Prismae.init()
+    initializeSentry()
+    await initializePrisma()
 
-    Logger.info(TAG, 'Starting milk under the following conditions ' + JSON.stringify(CONFIGURATION))
-    if (CONFIGURATION.WRITES_ENABLED) {
-        await Koffaka.init()
+    const configuration = {
+        writesEnabled: process.env.WRITES_ENABLED?.toLowerCase() === 'true',
+        readsEnabled: process.env.READS_ENABLED?.toLowerCase() === 'true'
     }
 
-    if (CONFIGURATION.READS_ENABLED) {
-        await Fastified.init()
+    Logger.info(TAG, 'Starting milk under the following conditions ' + JSON.stringify(configuration))
+
+    if (!configuration.readsEnabled && !configuration.writesEnabled) {
+        logIssue('Milk needs to be in at least read or write mode to function.')
+        return
+    }
+
+    if (configuration.writesEnabled) {
+        await initializeKafka()
+    }
+
+    if (configuration.readsEnabled) {
+        await initializeFastify()
     }
 }
 

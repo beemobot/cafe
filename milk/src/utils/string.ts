@@ -1,22 +1,22 @@
-import {NumberUtil} from "./number.js";
+import {randomNumber} from "./number.js";
 
-export const random = (length: number): string => {
+export const randomString = (length: number): string => {
     let contents = '';
     while (contents.length < length) {
-        let seed = NumberUtil.random(1, 4);
+        let seed = randomNumber(1, 4);
         switch (seed) {
             case 1: {
-                seed = NumberUtil.random(65, 91);
+                seed = randomNumber(65, 91);
                 contents += String.fromCharCode(seed);
                 break;
             }
             case 2: {
-                seed = NumberUtil.random(97, 123);
+                seed = randomNumber(97, 123);
                 contents += String.fromCharCode(seed);
                 break;
             }
             case 3: {
-                seed = NumberUtil.random(0, 10);
+                seed = randomNumber(0, 10);
                 contents += seed;
                 break;
             }
@@ -24,5 +24,3 @@ export const random = (length: number): string => {
     }
     return contents
 }
-
-export const StringUtil = { random: random }
