@@ -39,7 +39,7 @@ class RatelimitClient(connection: BrokerConnection) : BrokerClient(connection) {
 
             log.debug("Incoming {} quota request from service {}", type, service)
             val provider = when (msg.type) {
-                SharedRatelimitData.RatelimitType.GLBOAL -> globalRatelimitProvider
+                SharedRatelimitData.RatelimitType.GLOBAL -> globalRatelimitProvider
                 SharedRatelimitData.RatelimitType.IDENTIFY -> identifyRatelimitProvider
                 else -> throw IllegalArgumentException("Unknown ratelimit type ${msg.type}")
             }
