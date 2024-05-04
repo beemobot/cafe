@@ -36,6 +36,7 @@ class KafkaConnection(
 ) : BrokerConnection() {
 
     override val supportsTopicHotSwap = false
+    override val deferInitialTopicCreation = false
     private val kafkaHostsString = kafkaHosts.joinToString(",")
     private val log by Log
 
@@ -81,7 +82,7 @@ class KafkaConnection(
         return headers.messageId
     }
 
-    override suspend fun start() {
+    override suspend fun abstractStart() {
         check(!isRunning) { "KafkaConnection is already running!" }
         log.debug("Starting Kafka Connection")
         createTopics()

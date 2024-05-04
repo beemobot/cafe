@@ -18,27 +18,36 @@ private class ChannelData(
     var consumerTag: String? = null,
 )
 
+// TODO Temporary keys/topics created by RPC clients should ideally be cached and re-used,
+//  instead of being destroyed and recreated every time.
+
 class RabbitConnection(
     rabbitHosts: Array<String>,
     override val serviceName: String,
     override val instanceId: String,
     private val useTls: Boolean = false,
+    private val username: String = "guest",
+    private val password: String = "guest",
 ) : BrokerConnection() {
 
     override val supportsTopicHotSwap = true
+    override val deferInitialTopicCreation = true
     private val rabbitAddresses = rabbitHosts.map(Address::parseAddress)
     private val log by Log
 
     private var connection: Connection? = null
     private val channels = Collections.synchronizedMap(HashMap<String, ChannelData>())
 
-    override suspend fun start() {
-        connection = ConnectionFactory().apply {
+    override suspend fun abstractStart() {
+        connection = ConnectionFactory().also {
             if (useTls) {
                 // TODO This will trust every cert, even self-signed ones
-                useSslProtocol()
+                it.useSslProtocol()
             }
-            useNio()
+            it.useNio()
+            it.username = username
+            it.password = password
+            // TODO Investogate more properties, such as client-provided name
         }.newConnection(rabbitAddresses, instanceId)
     }
 
@@ -55,8 +64,9 @@ class RabbitConnection(
             // through the same channel at the same time is fine though.
             channelData.sendMutex.withLock {
                 val properties = AMQP.BasicProperties.Builder().apply {
+                    // https://www.rabbitmq.com/docs/publishers#message-properties
+                    deliveryMode(2) // Persistent
                     headers(headers.headers) // lol
-                    // TODO Investigate other properties
                 }.build()
                 // TODO Later, we can set mandatory=true here and set up a dead letter exchange.
                 //  This would be especially useful for raid bans, so that they don't get lost.

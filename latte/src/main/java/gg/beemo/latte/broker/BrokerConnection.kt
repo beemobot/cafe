@@ -2,6 +2,9 @@ package gg.beemo.latte.broker
 
 import gg.beemo.latte.logging.Log
 import java.util.*
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.collections.HashSet
+import kotlin.math.abs
 
 fun interface TopicListener {
     fun onMessage(topic: String, key: String, value: String, headers: BrokerMessageHeaders)
@@ -14,12 +17,25 @@ abstract class BrokerConnection {
     abstract val serviceName: String
     abstract val instanceId: String
     abstract val supportsTopicHotSwap: Boolean
+    abstract val deferInitialTopicCreation: Boolean
 
     protected val topicListeners: MutableMap<String, MutableSet<TopicListener>> = Collections.synchronizedMap(HashMap())
+    private val deferredTopicsToCreate: MutableSet<String> = Collections.synchronizedSet(HashSet())
+    private val hasStarted = AtomicBoolean(false)
 
     private val log by Log
 
-    abstract suspend fun start()
+    suspend fun start() {
+        abstractStart()
+        hasStarted.set(true)
+        for (topic in deferredTopicsToCreate) {
+            createTopic(topic)
+        }
+        deferredTopicsToCreate.clear()
+    }
+
+    internal abstract suspend fun abstractStart()
+
     open fun destroy() {
         log.debug("Destroying BrokerConnection")
         topicListeners.clear()
@@ -53,8 +69,13 @@ abstract class BrokerConnection {
 
     internal fun on(topic: String, cb: TopicListener) {
         topicListeners.computeIfAbsent(topic) {
-            log.debug("Creating new topic '{}'", topic)
-            createTopic(topic)
+            if (!hasStarted.get() && deferInitialTopicCreation) {
+                log.debug("Deferring creation of topic '{}' to after connected", topic)
+                deferredTopicsToCreate.add(topic)
+            } else {
+                log.debug("Creating new topic '{}'", topic)
+                createTopic(topic)
+            }
             Collections.synchronizedSet(HashSet())
         }.add(cb)
     }

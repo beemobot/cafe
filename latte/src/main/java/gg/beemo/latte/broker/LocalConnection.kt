@@ -6,6 +6,7 @@ class LocalConnection(
 ) : BrokerConnection() {
 
     override val supportsTopicHotSwap = true
+    override val deferInitialTopicCreation = false
 
     override suspend fun abstractSend(
         topic: String,
@@ -30,7 +31,7 @@ class LocalConnection(
         return headers.messageId
     }
 
-    override suspend fun start() {
+    override suspend fun abstractStart() {
         // Nothing to start :)
     }
 
