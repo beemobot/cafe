@@ -9,6 +9,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.util.*
 import java.util.concurrent.atomic.AtomicBoolean
+import javax.net.ssl.SSLContext
 
 
 private class ChannelData(
@@ -38,13 +39,14 @@ class RabbitConnection(
     override suspend fun abstractStart() {
         connection = ConnectionFactory().also {
             if (useTls) {
-                // TODO This will trust every cert, even self-signed ones
-                it.useSslProtocol()
+                it.useSslProtocol(SSLContext.getDefault())
+                it.enableHostnameVerification()
             }
             it.useNio()
             it.username = username
             it.password = password
-            // TODO Investogate more properties, such as client-provided name
+            it.isAutomaticRecoveryEnabled = true
+            it.isTopologyRecoveryEnabled = true
         }.newConnection(rabbitAddresses, instanceId)
     }
 
@@ -65,9 +67,6 @@ class RabbitConnection(
                     deliveryMode(2) // Persistent
                     headers(headers.headers) // lol
                 }.build()
-                // TODO Later, we can set mandatory=true here and set up a dead letter exchange.
-                //  This would be especially useful for raid bans, so that they don't get lost.
-                //  Though iirc they should be queued, no? Investigate queueing behavior, again.
                 channelData.channel.basicPublish(topic, key, properties, value.toByteArray())
             }
 
@@ -108,7 +107,7 @@ class RabbitConnection(
                     return
                 }
                 log.error("RabbitMQ consumer for topic $topic has shut down unexpectedly", sig)
-                // TODO Automatic Reconnect?
+                // The client _should_ automatically recover the connection
             }
         }
         channelData.consumerTag = channelData.channel.basicConsume(createQueueName(topic), false, consumer)
