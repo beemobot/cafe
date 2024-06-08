@@ -22,7 +22,7 @@ class TestBrokerClient(
 
     val greetingRpc = rpc<GreetingRequest, GreetingResponse>(
         topic = "rpc.greetings",
-        key = "greeting.requests",
+        key = "greet",
     ) {
         log.info("greetingRpc received request: ${it.value}")
         return@rpc RpcStatus.OK to GreetingResponse("Hello, ${it.value.name}")

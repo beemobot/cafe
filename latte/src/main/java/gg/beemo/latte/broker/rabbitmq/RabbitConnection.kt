@@ -18,9 +18,6 @@ private class ChannelData(
     var consumerTag: String? = null,
 )
 
-// TODO Temporary keys/topics created by RPC clients should ideally be cached and re-used,
-//  instead of being destroyed and recreated every time.
-
 class RabbitConnection(
     rabbitHosts: Array<String>,
     override val serviceName: String,
