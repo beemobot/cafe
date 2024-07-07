@@ -1,7 +1,7 @@
 package gg.beemo.vanilla
 
 import gg.beemo.latte.CommonConfig
-import gg.beemo.latte.broker.kafka.KafkaConnection
+import gg.beemo.latte.broker.rabbitmq.RabbitConnection
 import gg.beemo.latte.config.Configurator
 import gg.beemo.latte.logging.Log
 import gg.beemo.latte.logging.log
@@ -19,11 +19,13 @@ object Vanilla {
         Configurator.create().mirror(Config::class.java)
 
         log.debug("Initializing Kafka connection")
-        val brokerConnection = KafkaConnection(
-            Config.KAFKA_HOST,
-            CommonConfig.BrokerServices.VANILLA,
-            "0", // There will only ever be one instance of vanilla
-            Config.KAFKA_USE_TLS,
+        val brokerConnection = RabbitConnection(
+            rabbitHosts = Config.RABBIT_HOST,
+            serviceName = CommonConfig.BrokerServices.VANILLA,
+            instanceId  = "0", // There will only ever be one instance of vanilla
+            useTls = Config.RABBIT_USE_TLS,
+            username = Config.RABBIT_USERNAME,
+            password = Config.RABBIT_PASSWORD,
         )
 
         log.debug("Initializing Kafka Ratelimit client")
