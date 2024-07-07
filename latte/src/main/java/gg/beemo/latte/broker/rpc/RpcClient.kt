@@ -7,8 +7,10 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.single
+import kotlinx.coroutines.launch
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.time.Duration
@@ -37,14 +39,6 @@ class RpcClient<RequestT, ResponseT>(
 
     private val requestProducer = client.producer(topic, key, options, requestType, requestIsNullable)
     private val requestConsumer = client.consumer(topic, key, options, requestType, requestIsNullable) { msg ->
-        val responseProducer = client.producer(
-            client.toResponseTopic(topic),
-            client.toResponseKey(key),
-            options,
-            responseType,
-            responseIsNullable,
-        )
-
         suspend fun sendResponse(response: ResponseT?, status: RpcStatus, isException: Boolean, isUpdate: Boolean) {
             val responseMsg = RpcResponseMessage(
                 client.toResponseTopic(topic),
@@ -77,14 +71,29 @@ class RpcClient<RequestT, ResponseT>(
             return@consumer
         } catch (ex: Exception) {
             log.error(
-                "Uncaught RPC callback error while processing message ${msg.headers.messageId} " +
+                "Uncaught RPC callbac#k error while processing message ${msg.headers.messageId} " +
                         "with key '$key' in topic '$topic'",
                 ex,
             )
             return@consumer
-        } finally {
-            responseProducer.destroy()
         }
+    }
+    private val responseProducer = client.producer(
+        client.toResponseTopic(topic),
+        client.toResponseKey(key),
+        options,
+        responseType,
+        responseIsNullable,
+    )
+    private val responseFlow = MutableSharedFlow<BaseBrokerMessage<ResponseT>>()
+    private val responseConsumer = client.consumer(
+        client.toResponseTopic(topic),
+        client.toResponseKey(key),
+        options,
+        responseType,
+        responseIsNullable,
+    ) {
+        responseFlow.emit(it)
     }
 
     suspend fun call(
@@ -110,36 +119,29 @@ class RpcClient<RequestT, ResponseT>(
             require(maxResponses > 0) { "maxResponses must be at least 1" }
         }
         return callbackFlow {
+            val cbFlow = this
             val responseCounter = AtomicInteger(0)
             val timeoutLatch = maxResponses?.let { SuspendingCountDownLatch(it) }
             val messageId = AtomicReference<String?>(null)
 
-            val responseConsumer = client.consumer(
-                client.toResponseTopic(topic),
-                client.toResponseKey(key),
-                options,
-                responseType,
-                responseIsNullable,
-            ) {
-                val msg = it.toRpcResponseMessage()
-                if (msg.headers.inReplyTo != messageId.get()) {
-                    return@consumer
+            launch { // Asynchronously consume responses; gets cancelled with callbackFlow
+                responseFlow.collect {
+                    val msg = it.toRpcResponseMessage()
+                    if (msg.headers.inReplyTo != messageId.get()) {
+                        return@collect
+                    }
+                    // Close the callbackFlow if we receive an exception
+                    if (msg.headers.isException) {
+                        cbFlow.close(RpcException(msg.headers.status))
+                        return@collect
+                    }
+                    cbFlow.send(msg)
+                    timeoutLatch?.countDown()
+                    val count = responseCounter.incrementAndGet()
+                    if (maxResponses != null && count >= maxResponses) {
+                        cbFlow.close()
+                    }
                 }
-                // Close the flow if we receive an exception
-                if (msg.headers.isException) {
-                    close(RpcException(msg.headers.status))
-                    return@consumer
-                }
-                send(msg)
-                timeoutLatch?.countDown()
-                val count = responseCounter.incrementAndGet()
-                if (maxResponses != null && count >= maxResponses) {
-                    close()
-                }
-            }
-
-            invokeOnClose {
-                responseConsumer.destroy()
             }
 
             messageId.set(requestProducer.send(request, services, instances))
@@ -161,6 +163,8 @@ class RpcClient<RequestT, ResponseT>(
     override fun doDestroy() {
         requestProducer.destroy()
         requestConsumer.destroy()
+        responseProducer.destroy()
+        responseConsumer.destroy()
     }
 
 }

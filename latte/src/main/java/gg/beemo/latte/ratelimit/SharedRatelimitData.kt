@@ -18,7 +18,7 @@ object SharedRatelimitData {
 
     enum class RatelimitType {
         @Json(name = "global")
-        GLBOAL,
+        GLOBAL,
 
         @Json(name = "identify")
         IDENTIFY,

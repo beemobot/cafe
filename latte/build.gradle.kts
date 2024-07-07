@@ -19,6 +19,10 @@ dependencies {
     implementation("org.apache.kafka:kafka-clients:$kafkaVersion")
     implementation("org.apache.kafka:kafka-streams:$kafkaVersion")
 
+    // RabbitMQ
+    val rabbitVersion = "5.20.0"
+    implementation("com.rabbitmq:amqp-client:$rabbitVersion")
+
     // JSON
     val moshiVersion = "1.14.0"
     implementation("com.squareup.moshi:moshi:$moshiVersion")
