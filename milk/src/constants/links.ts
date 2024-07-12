@@ -1,0 +1,1 @@
+export const JSON_API_DOCUMENTATIONS = "https://github.com/beemobot/cafe/blob/main/milk/docs/json_api.md"

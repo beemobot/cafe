@@ -8,17 +8,23 @@ datasource db {
 }
 
 model RaidUser {
-  internal_raid_id  String    @db.Uuid
-  user_id           BigInt    @unique
-  name              String
-  avatar_hash       String?
-  created_at        DateTime  @db.Timestamptz
-  joined_at         DateTime  @db.Timestamptz
+  raid        Raid?    @relation(fields: [raid_id], references: [id])
+  raid_id     String
+  id          BigInt
+  name        String
+  avatar_hash String?
+  created_at  DateTime @db.Timestamptz
+  joined_at   DateTime @db.Timestamptz
+
+  @@id([raid_id, id])
+  @@index([joined_at])
 }
 
 model Raid {
-  internal_id       String     @unique @db.Uuid
-  external_id       String     @unique
-  guild_id          BigInt
-  concluded_at      DateTime?  @db.Timestamptz
+  id           String     @unique
+  public_id    String     @unique
+  guild_id     BigInt
+  created_at   DateTime   @default(now()) @db.Timestamptz()
+  concluded_at DateTime?  @db.Timestamptz
+  users        RaidUser[]
 }

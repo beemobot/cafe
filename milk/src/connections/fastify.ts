@@ -1,45 +1,39 @@
 import {Logger} from "@beemobot/common";
 // ^ This needs to be updated; Probably @beemobot/cafe
-import {TAG} from "../index.js";
-import Fastify, {FastifyInstance} from "fastify";
-import {GetAntispam} from "../routes/GetAntispam.js";
-import {LogHook} from "../hooks/LogHook.js";
-import {ErrorAndNotFoundHook} from "../hooks/ErrorAndNotFoundHook.js";
-import {DefaultRoute} from "../routes/DefaultRoute.js";
-import {Attachable} from "../types/fastify.js";
+import Fastify from "fastify";
+import GetAntispam from "../routes/get_raid.js";
+import LogHook from "../hooks/log_hook.js";
+import ErrorHook from "../hooks/error_hook.js";
+import DefaultRoute from "../routes/default_route.js";
+import {logError, logIssue} from "./sentry.js";
+import {TAG} from "../constants/logging.js";
 
-export const server: FastifyInstance = Fastify.default({ ignoreTrailingSlash: true, ignoreDuplicateSlashes: true })
-export const attachables: Attachable[] = [
-    ErrorAndNotFoundHook,
-    LogHook,
-    GetAntispam,
-    DefaultRoute
-]
+const server = Fastify.default({
+    ignoreTrailingSlash: true,
+    ignoreDuplicateSlashes: true,
+    trustProxy: (process.env.TRUST_PROXY ?? 'false').toLowerCase() === 'true',
+    disableRequestLogging: true
+})
 
-async function init() {
-    if (!process.env.SERVER_PORT || Number.isNaN(process.env.SERVER_PORT)) {
-        Logger.error(TAG, 'Server Port is not configured, discarding request to start.')
-        process.exit()
-        return
+export async function initializeFastify() {
+    try {
+        if (!process.env.SERVER_PORT || Number.isNaN(process.env.SERVER_PORT)) {
+            logIssue('You need to configure a server port for the service to work.')
+            return
+        }
+
+        for (const attachable of [ErrorHook, LogHook, GetAntispam, DefaultRoute]) {
+            attachable(server)
+        }
+
+        const port = Number.parseInt(process.env.SERVER_PORT)
+        await server.listen({
+            port: port,
+            host: '0.0.0.0'
+        })
+
+        Logger.info(TAG, `Milk is now serving logs under port ${port}.`)
+    } catch (ex) {
+        logError('An issue occurred while trying to start Fastify.', ex)
     }
-
-    for (const attachable of attachables) {
-        await attachable.attach(server)
-    }
-
-    const port = Number.parseInt(process.env.SERVER_PORT)
-    const link = 'http://localhost:' + port
-
-    await server.listen({
-        port: port,
-        host: '0.0.0.0'
-    })
-
-    Logger.info(TAG, 'Fastify Server is now running ' + JSON.stringify({
-        port: port,
-        antispam: link + '/antispam/',
-        messages: link + '/messages/'
-    }))
 }
-
-export const Fastified = { init: init }
