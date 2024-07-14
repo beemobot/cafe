@@ -1,3 +1,5 @@
+import type { RpcStatus } from "./rpc/RpcStatus.js";
+
 export class BrokerException extends Error {
     public constructor(message?: string) {
         super(message);

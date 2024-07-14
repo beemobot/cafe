@@ -10,17 +10,31 @@ const TAG = "BrokerConnection";
 
 export abstract class BrokerConnection {
 
-    public abstract serviceName: string;
-    public abstract instanceId: string;
-    public abstract supportsTopicHotSwap: boolean;
+    public abstract readonly serviceName: string;
+    public abstract readonly instanceId: string;
+    public abstract readonly supportsTopicHotSwap: boolean;
+    public abstract readonly deferInitialTopicCreation: boolean;
 
-    protected topicListeners: Map<string, Set<TopicListener>> = new Map();
+    protected readonly topicListeners: Map<string, Set<TopicListener>> = new Map();
+    private readonly deferredTopicsToCreate: Set<string> = new Set();
+    private hasStarted: boolean = false;
 
-    public abstract start(): Promise<void>;
+    public async start(): Promise<void> {
+        await this.abstractStart();
+        this.hasStarted = true;
+        for (const topic of this.deferredTopicsToCreate) {
+            this.createTopic(topic);
+        }
+        this.deferredTopicsToCreate.clear();
+    }
+
     public async destroy(): Promise<void> {
+        Logger.debug(TAG, "Destroying BrokerConnection");
         this.topicListeners.clear();
     }
 
+
+    public abstract abstractStart(): Promise<void>;
     public abstract abstractSend(topic: string, key: string, value: string, headers: BrokerMessageHeaders): Promise<MessageId>;
 
     public send(topic: string, key: string, value: string, headers: BrokerMessageHeaders): Promise<MessageId> {
@@ -35,8 +49,13 @@ export abstract class BrokerConnection {
         let listeners = this.topicListeners.get(topic);
         if (!listeners) {
             listeners = new Set();
-            Logger.debug(TAG, `Creating new topic '${topic}'`);
-            this.createTopic(topic);
+            if (!this.hasStarted && this.deferInitialTopicCreation) {
+                Logger.debug(TAG, `Deferring creation of topic '${topic}' to after connected`);
+                this.deferredTopicsToCreate.add(topic);
+            } else {
+                Logger.debug(TAG, `Creating new topic '${topic}'`);
+                this.createTopic(topic);
+            }
             this.topicListeners.set(topic, listeners);
         }
         listeners.add(cb);
@@ -48,6 +67,7 @@ export abstract class BrokerConnection {
             listeners.delete(cb);
             if (listeners.size === 0) {
                 Logger.debug(TAG, `Removing topic '${topic}'`);
+                this.deferredTopicsToCreate.delete(topic);
                 this.removeTopic(topic);
                 this.topicListeners.delete(topic);
             }
@@ -57,8 +77,8 @@ export abstract class BrokerConnection {
     // To be called by implementers
     protected dispatchIncomingMessage(topic: string, key: string, value: string, headers: BrokerMessageHeaders): void {
         if (
-            (headers.targetServices.size >= 1 && !headers.targetServices.has(this.serviceName)) ||
-            (headers.targetInstances.size >= 1 && !headers.targetInstances.has(this.instanceId))
+            (headers.targetServices.size > 0 && !headers.targetServices.has(this.serviceName)) ||
+            (headers.targetInstances.size > 0 && !headers.targetInstances.has(this.instanceId))
         ) {
             // If there is a target cluster restriction and this message wasn't meant for us,
             // discard it immediately without notifying any listeners.
