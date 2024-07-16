@@ -103,6 +103,13 @@ export class RabbitConnection extends BrokerConnection {
             });
             this.consumers.delete(topic);
         }
+        const publisher = this.publishers.get(topic);
+        if (publisher) {
+            publisher.close().catch(e => {
+                Logger.error(RabbitConnection.TAG, `Error closing publisher for topic ${topic}`, e);
+            });
+            this.publishers.delete(topic);
+        }
     }
 
     private ensureConnection(): Connection {
