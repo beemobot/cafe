@@ -33,8 +33,9 @@ export abstract class BrokerConnection {
         this.topicListeners.clear();
     }
 
-
+    // Internal API
     public abstract abstractStart(): Promise<void>;
+    // Internal API
     public abstract abstractSend(topic: string, key: string, value: string, headers: BrokerMessageHeaders): Promise<MessageId>;
 
     public send(topic: string, key: string, value: string, headers: BrokerMessageHeaders): Promise<MessageId> {

@@ -66,6 +66,7 @@ class RabbitConnection(
                     // https://www.rabbitmq.com/docs/publishers#message-properties
                     deliveryMode(2) // Persistent
                     headers(headers.headers) // lol
+                    messageId(headers.messageId)
                 }.build()
                 channelData.channel.basicPublish(topic, key, properties, value.toByteArray())
             }

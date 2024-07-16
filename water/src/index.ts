@@ -11,6 +11,7 @@ export * from "./broker/rpc/RpcClient.js";
 export * from "./broker/rpc/RpcMessage.js";
 export * from "./broker/rpc/RpcMessageHeaders.js";
 export * from "./broker/rpc/RpcStatus.js";
+export * from "./broker/rabbitmq/RabbitConnection.js";
 
 export * from "./logging/Logger.js";
 

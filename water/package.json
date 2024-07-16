@@ -15,6 +15,7 @@
 		"dist"
 	],
 	"dependencies": {
+		"rabbitmq-client": "^4.6.0",
 		"valibot": "^0.36.0"
 	},
 	"devDependencies": {
