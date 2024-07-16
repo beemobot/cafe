@@ -1,3 +1,5 @@
+import type { BaseIssue, BaseSchema, InferOutput } from "valibot";
+import { parse } from "valibot";
 import { Logger } from "../logging/Logger.js";
 import type { BrokerClient } from "./BrokerClient.js";
 import type { BrokerConnection, MessageId } from "./BrokerConnection.js";
@@ -40,7 +42,6 @@ export class ProducerSubclient<T> extends BaseSubclient {
         topic: string,
         key: string,
         options: BrokerClientOptions,
-        private readonly schema: T, // TODO eeeeeh
     ) {
         super(connection, client, topic, key, options);
     }
@@ -80,7 +81,7 @@ export class ProducerSubclient<T> extends BaseSubclient {
 
 }
 
-export class ConsumerSubclient<T> extends BaseSubclient {
+export class ConsumerSubclient<TSchema extends BaseSchema<unknown, unknown, BaseIssue<unknown>>> extends BaseSubclient {
 
     private static readonly TAG = "ConsumerSubclient";
 
@@ -90,8 +91,8 @@ export class ConsumerSubclient<T> extends BaseSubclient {
         topic: string,
         key: string,
         options: BrokerClientOptions,
-        private readonly schema: T, // TODO eeeeeh
-        private readonly callback: (msg: BrokerMessage<T>) => Promise<void>,
+        private readonly schema: TSchema,
+        private readonly callback: (msg: BrokerMessage<InferOutput<TSchema>>) => Promise<void>,
     ) {
         super(connection, client, topic, key, options);
     }
@@ -121,9 +122,8 @@ export class ConsumerSubclient<T> extends BaseSubclient {
         }
     }
 
-    private parseIncoming(data: string): T {
-        // TODO schema validation
-        return JSON.parse(data);
+    private parseIncoming(data: string): InferOutput<TSchema> {
+        return parse(this.schema, JSON.parse(data));
     }
 
 }

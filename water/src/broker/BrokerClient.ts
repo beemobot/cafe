@@ -1,3 +1,4 @@
+import type { BaseIssue, BaseSchema, InferOutput } from "valibot";
 import { Logger } from "../logging/Logger.js";
 import type { BrokerConnection, TopicListener } from "./BrokerConnection.js";
 import type { BrokerMessage } from "./BrokerMessage.js";
@@ -15,13 +16,13 @@ export abstract class BrokerClient {
 
     public constructor(public readonly connection: BrokerConnection) { }
 
-    public consumer<T>(
+    public consumer<TSchema extends BaseSchema<unknown, unknown, BaseIssue<unknown>>>(
         topic: string,
         key: string,
-        schema: T, // TODO
+        schema: TSchema,
         options: BrokerClientOptions = new BrokerClientOptions(),
-        callback: (msg: BrokerMessage<T>) => Promise<void>,
-    ): ConsumerSubclient<T> {
+        callback: (msg: BrokerMessage<InferOutput<TSchema>>) => Promise<void>,
+    ): ConsumerSubclient<TSchema> {
         Logger.debug(BrokerClient.TAG, `Creating consumer for key '${key}' in topic '${topic}'`);
         const client = new ConsumerSubclient(this.connection, this, topic, key, options, schema, callback);
         this.registerSubclient(client);
@@ -31,23 +32,28 @@ export abstract class BrokerClient {
     public producer<T>(
         topic: string,
         key: string,
-        schema: T, // TODO
         options: BrokerClientOptions = new BrokerClientOptions(),
     ): ProducerSubclient<T> {
         Logger.debug(BrokerClient.TAG, `Creating producer for key '${key}' in topic '${topic}'`);
-        const client = new ProducerSubclient(this.connection, this, topic, key, options, schema);
+        const client = new ProducerSubclient(this.connection, this, topic, key, options);
         this.registerSubclient(client);
         return client;
     }
 
-    public rpc<RequestT, ResponseT>(
+    public rpc<
+        RequestTSchema extends BaseSchema<unknown, unknown, BaseIssue<unknown>>,
+        ResponseTSchema extends BaseSchema<unknown, unknown, BaseIssue<unknown>>,
+    >(
         topic: string,
         key: string,
-        requestSchema: RequestT, // TODO
-        responseSchema: ResponseT, // TODO
+        requestSchema: RequestTSchema,
+        responseSchema: ResponseTSchema,
         options: BrokerClientOptions = new BrokerClientOptions(),
-        callback: (msg: RpcRequestMessage<RequestT, ResponseT>) => Promise<RpcResponse<ResponseT>>,
-    ): RpcClient<RequestT, ResponseT> {
+        callback: (msg: RpcRequestMessage<
+            InferOutput<RequestTSchema>,
+            InferOutput<ResponseTSchema>
+        >) => Promise<RpcResponse<ResponseTSchema>>,
+    ): RpcClient<RequestTSchema, ResponseTSchema> {
         return new RpcClient(
             this,
             topic,
