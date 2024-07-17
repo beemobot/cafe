@@ -16,4 +16,3 @@ export * from "./broker/rabbitmq/RabbitConnection.js";
 export * from "./logging/Logger.js";
 
 export * from "./util/CountDownLatch.js";
-export * from "./util/OnlineEmitter.js";

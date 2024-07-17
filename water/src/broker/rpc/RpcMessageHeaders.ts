@@ -1,4 +1,4 @@
-import { getOrThrow } from "../../util/internal.js";
+import { getOrThrow } from "../../util/internal/util.js";
 import type { MessageId } from "@";
 import { BrokerConnection, BrokerMessageHeaders, RpcStatus } from "@";
 

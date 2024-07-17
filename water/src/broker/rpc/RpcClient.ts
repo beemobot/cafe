@@ -1,5 +1,6 @@
 import type { BaseIssue, BaseSchema, InferOutput } from "valibot";
-import { OnlineEmitter } from "../../util/OnlineEmitter.js";
+import { OnlineEmitter } from "../../util/internal/OnlineEmitter.js";
+import { BufferedEmitter } from "../../util/internal/BufferedEmitter.js";
 import type {
 	BrokerClient,
 	BrokerClientOptions,
@@ -141,30 +142,42 @@ export class RpcClient<
 		const timeoutLatch = maxResponses ? new CountDownLatch(maxResponses) : null;
 		const timeoutPromise = timeoutLatch?.await(timeout) ?? new Promise(() => {});
 
-		const messageId = await this.requestProducer.send(request, services, instances);
+		// Start to listen for responses before sending the request to avoid missing any,
+		// especially with local short-circuit which will run synchronoously to the request.
+		const responses = new BufferedEmitter<BrokerMessage<InferOutput<ResponseTSchema>>>();
+		const responseListener = (msg: BrokerMessage<InferOutput<ResponseTSchema>>) => {
+			responses.emit(msg);
+		};
 
-		while (true) {
-			const result = await Promise.race([this.responses.awaitValue(), timeoutPromise]);
-			if (typeof result === "boolean") {
-				if (result) {
+		try {
+			this.responses.addListener(responseListener);
+			const messageId = await this.requestProducer.send(request, services, instances);
+
+			while (true) {
+				const result = await Promise.race([responses.next(), timeoutPromise]);
+				if (typeof result === "boolean") {
+					if (result) {
+						return;
+					} else {
+						throw new RpcRequestTimeout(`RPC request timed out after ${timeout} ms`);
+					}
+				}
+				const msg = result.toRpcResponseMessage();
+				if (msg.headers.inReplyTo !== messageId) {
 					return;
-				} else {
-					throw new RpcRequestTimeout(`RPC request timed out after ${timeout} ms`);
+				}
+				if (msg.headers.isException) {
+					throw new RpcException(msg.headers.status);
+				}
+				yield msg;
+				timeoutLatch?.countDown();
+				responseCounter++;
+				if (responseCounter >= maxResponses) {
+					return;
 				}
 			}
-			const msg = result.toRpcResponseMessage();
-			if (msg.headers.inReplyTo !== messageId) {
-				return;
-			}
-			if (msg.headers.isException) {
-				throw new RpcException(msg.headers.status);
-			}
-			yield msg;
-			timeoutLatch?.countDown();
-			responseCounter++;
-			if (responseCounter >= maxResponses) {
-				return;
-			}
+		} finally {
+			this.responses.removeListener(responseListener);
 		}
 	}
 

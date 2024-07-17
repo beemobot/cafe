@@ -1,5 +1,9 @@
+/**
+ * A class that allows for emitting events to multiple listeners.
+ * Events emitted when no listeners are registered are lost.
+ */
 export class OnlineEmitter<T> {
-	private readonly listeners: Set<(data: T) => void> = new Set();
+	protected readonly listeners: Set<(data: T) => void> = new Set();
 
 	public emit(data: T): void {
 		for (const listener of this.listeners) {
@@ -15,7 +19,7 @@ export class OnlineEmitter<T> {
 		this.listeners.delete(listener);
 	}
 
-	public async awaitValue(): Promise<T> {
+	public async next(): Promise<T> {
 		return new Promise(resolve => {
 			const listener = (data: T) => {
 				this.removeListener(listener);
@@ -26,10 +30,10 @@ export class OnlineEmitter<T> {
 	}
 
 	public [Symbol.asyncIterator](): AsyncIterableIterator<T> {
-		const awaitValue = this.awaitValue.bind(this);
+		const next = this.next.bind(this);
 		return {
 			async next(): Promise<IteratorResult<T>> {
-				const value = await awaitValue();
+				const value = await next();
 				return { value, done: false };
 			},
 			[Symbol.asyncIterator](): AsyncIterableIterator<T> {

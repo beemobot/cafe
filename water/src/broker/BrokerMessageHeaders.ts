@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { getOrThrow } from "../util/internal.js";
+import { getOrThrow } from "../util/internal/util.js";
 import type { MessageId } from "@";
 import { BrokerConnection } from "@";
 
