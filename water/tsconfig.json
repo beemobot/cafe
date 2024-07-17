@@ -20,7 +20,11 @@
 		"sourceMap": true,
 		"strict": true,
 		"useDefineForClassFields": true,
-		"outDir": "dist"
+		"outDir": "dist",
+		"paths": {
+			"@": ["./src/index.js"],
+			"@/*": ["./src/*"]
+		}
 	},
 	"include": ["src/**/*"]
 }
