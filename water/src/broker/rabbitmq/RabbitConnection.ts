@@ -1,9 +1,7 @@
 import type { Consumer, Publisher } from "rabbitmq-client";
 import { Connection } from "rabbitmq-client";
 import type { MessageId } from "../BrokerConnection.js";
-import { BrokerConnection } from "../BrokerConnection.js";
-import { BrokerMessageHeaders } from "../BrokerMessageHeaders.js";
-import { Logger } from "../../logging/Logger.js";
+import { BrokerConnection, BrokerMessageHeaders, Logger } from "../../index.js";
 
 export class RabbitConnection extends BrokerConnection {
 

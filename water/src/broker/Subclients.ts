@@ -1,10 +1,8 @@
 import type { BaseIssue, BaseSchema, InferOutput } from "valibot";
 import { parse } from "valibot";
-import { Logger } from "../logging/Logger.js";
+import { BrokerMessage, BrokerMessageHeaders, Logger } from "../index.js";
 import type { BrokerClient } from "./BrokerClient.js";
 import type { BrokerConnection, MessageId } from "./BrokerConnection.js";
-import { BrokerMessage } from "./BrokerMessage.js";
-import { BrokerMessageHeaders } from "./BrokerMessageHeaders.js";
 
 export class BrokerClientOptions {
     // No options exist in the JS universe at the moment

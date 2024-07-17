@@ -1,5 +1,5 @@
+import { BrokerConnection } from "../index.js";
 import type { MessageId } from "./BrokerConnection.js";
-import { BrokerConnection } from "./BrokerConnection.js";
 import type { BrokerMessageHeaders } from "./BrokerMessageHeaders.js";
 
 export class LocalConnection extends BrokerConnection {

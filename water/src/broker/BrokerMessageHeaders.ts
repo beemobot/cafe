@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { BrokerConnection } from "./BrokerConnection.js";
+import { BrokerConnection } from "../index.js";
 import type { MessageId } from "./BrokerConnection.js";
 
 const BROKER_HEADER_NAMES = {

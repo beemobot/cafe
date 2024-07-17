@@ -1,6 +1,5 @@
+import { RpcMessageHeaders, RpcRequestMessage, RpcResponseMessage } from "../index.js";
 import type { BrokerMessageHeaders } from "./BrokerMessageHeaders.js";
-import { RpcRequestMessage, RpcResponseMessage } from "./rpc/RpcMessage.js";
-import { RpcMessageHeaders } from "./rpc/RpcMessageHeaders.js";
 import type { RpcStatus } from "./rpc/RpcStatus.js";
 
 export class BrokerMessage<T, H extends BrokerMessageHeaders = BrokerMessageHeaders> {
