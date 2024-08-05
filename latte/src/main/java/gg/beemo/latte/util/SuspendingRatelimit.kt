@@ -46,16 +46,15 @@ class SuspendingRatelimit(private val burst: Int, private val duration: Duration
         }
     }
 
-    suspend fun tryRequestQuota(): Pair<Boolean, Long?> =
-        quotaRequestSem.withPermit {
-            if (remainingQuota <= 0) {
-                val waitTime = calculateWaitTime()
-                return@withPermit false to waitTime
-            }
-            tryResetQuota()
-
-            check(remainingQuota > 0)
-            remainingQuota--
-            return@withPermit true to null
+    fun tryRequestQuota(): Pair<Boolean, Long?>  {
+        if (remainingQuota <= 0) {
+            val waitTime = calculateWaitTime()
+            return false to waitTime
         }
+        tryResetQuota()
+
+        check(remainingQuota > 0)
+        remainingQuota--
+        return true to null
+    }
 }
