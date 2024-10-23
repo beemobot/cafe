@@ -5,14 +5,43 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlin.time.Duration
 
-class SuspendingRatelimit(private val burst: Int, private val duration: Duration) {
+class Ratelimit(val burst: Int, val duration: Duration) {
     @Volatile
     private var remainingQuota: Int = burst
+    val remaining: Int get() = remainingQuota
 
     @Volatile
     private var resetTimestamp: Long = 0
+    val resetAt: Long get() = resetTimestamp
 
     private val quotaRequestSem = Semaphore(1)
+
+    suspend fun requestQuota() {
+        quotaRequestSem.withPermit {
+            if (remainingQuota <= 0) {
+                tryResetQuota()
+                val waitTime = calculateWaitTime()
+                delay(waitTime)
+            }
+            tryResetQuota()
+            check(remainingQuota > 0)
+            remainingQuota--
+        }
+    }
+
+    fun tryRequestQuota(): Pair<Boolean, Long> {
+        tryResetQuota()
+        if (remainingQuota <= 0) {
+            return false to calculateWaitTime()
+        }
+        check(remainingQuota > 0)
+        remainingQuota--
+        return true to calculateWaitTime()
+    }
+
+    fun addQuota(amount: Int) {
+        remainingQuota += amount
+    }
 
     fun overrideRatelimit(
         remainingQuota: Int,
@@ -31,30 +60,5 @@ class SuspendingRatelimit(private val burst: Int, private val duration: Duration
             remainingQuota = burst
             resetTimestamp = System.currentTimeMillis() + duration.inWholeMilliseconds
         }
-    }
-
-    suspend fun requestQuota() {
-        quotaRequestSem.withPermit {
-            if (remainingQuota <= 0) {
-                val waitTime = calculateWaitTime()
-                delay(waitTime)
-            }
-            tryResetQuota()
-
-            check(remainingQuota > 0)
-            remainingQuota--
-        }
-    }
-
-    fun tryRequestQuota(): Pair<Boolean, Long?>  {
-        if (remainingQuota <= 0) {
-            val waitTime = calculateWaitTime()
-            return false to waitTime
-        }
-        tryResetQuota()
-
-        check(remainingQuota > 0)
-        remainingQuota--
-        return true to null
     }
 }

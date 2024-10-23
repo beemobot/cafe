@@ -6,7 +6,7 @@ import gg.beemo.latte.broker.IgnoreRpcRequest
 import gg.beemo.latte.broker.rpc.RpcStatus
 import gg.beemo.latte.logging.Log
 import gg.beemo.latte.ratelimit.SharedRatelimitData
-import gg.beemo.latte.util.SuspendingRatelimit
+import gg.beemo.latte.util.Ratelimit
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
@@ -14,11 +14,11 @@ import kotlin.time.Duration.Companion.seconds
 // Give request expiry a bit of leeway in case of clock drift
 private val EXPIRY_GRACE_PERIOD = 5.seconds.inWholeMilliseconds
 
-class RatelimitClient(connection: BrokerConnection) : BrokerClient(connection) {
+class KafkaRatelimitClient(connection: BrokerConnection) : BrokerClient(connection) {
 
     private val log by Log
-    private val globalRatelimitProvider = RatelimitProvider(50, 1.seconds)
-    private val identifyRatelimitProvider = RatelimitProvider(1, 5.seconds)
+    private val globalRatelimitProvider = KafkaRatelimitProvider(50, 1.seconds)
+    private val identifyRatelimitProvider = KafkaRatelimitProvider(1, 5.seconds)
 
     init {
         rpc<SharedRatelimitData.RatelimitRequestData, Unit>(
@@ -54,12 +54,12 @@ class RatelimitClient(connection: BrokerConnection) : BrokerClient(connection) {
 
 }
 
-private class RatelimitProvider(private val burst: Int, private val duration: Duration) {
+private class KafkaRatelimitProvider(private val burst: Int, private val duration: Duration) {
 
-    private val limiters = ConcurrentHashMap<String, SuspendingRatelimit>()
+    private val limiters = ConcurrentHashMap<String, Ratelimit>()
 
-    fun getClientRatelimit(clientId: String): SuspendingRatelimit = limiters.computeIfAbsent(clientId) {
-        SuspendingRatelimit(burst, duration)
+    fun getClientRatelimit(clientId: String): Ratelimit = limiters.computeIfAbsent(clientId) {
+        Ratelimit(burst, duration)
     }
 
 }

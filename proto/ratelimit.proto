@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "gg.beemo.vanilla";
+option java_outer_classname = "RatelimitProto";
+
+package ratelimit;
+
+service Ratelimit {
+  rpc RequestQuota (RatelimitRequest) returns (RatelimitResponse) {}
+}
+
+message RatelimitRequest {
+  RatelimitType type = 1;
+  fixed64 clientId = 2;
+}
+
+message RatelimitResponse {
+  bool granted = 1;
+  uint32 limit = 2;
+  uint32 remaining = 3;
+  uint64 reset = 4;
+  uint32 resetAfter = 5;
+}
+
+enum RatelimitType {
+  GLOBAL = 0;
+  IDENTIFY = 1;
+}
