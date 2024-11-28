@@ -4,7 +4,6 @@ import gg.beemo.latte.CommonConfig
 import gg.beemo.latte.broker.rabbitmq.RabbitConnection
 import gg.beemo.latte.config.Configurator
 import gg.beemo.latte.logging.Log
-import gg.beemo.latte.logging.log
 import io.grpc.Server
 import io.grpc.ServerBuilder
 import kotlinx.coroutines.runBlocking
@@ -30,9 +29,10 @@ object Vanilla {
             password = Config.RABBIT_PASSWORD,
         )
 
-        log.debug("Initializing Kafka Ratelimit client")
-        val ratelimitClient = KafkaRatelimitClient(brokerConnection)
+        log.debug("Initializing Broker Ratelimit client")
+        val ratelimitClient = BrokerRpcRatelimitClient(brokerConnection)
 
+        log.debug("Initializing gRPC Ratelimit client")
         val grpcServer: Server = ServerBuilder.forPort(Config.GRPC_PORT)
             .addService(GrpcRatelimitService())
             .build()

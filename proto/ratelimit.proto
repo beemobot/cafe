@@ -7,20 +7,19 @@ option java_outer_classname = "RatelimitProto";
 package ratelimit;
 
 service Ratelimit {
-  rpc RequestQuota (RatelimitRequest) returns (RatelimitResponse) {}
+  rpc ReserveQuota (RatelimitRequest) returns (RatelimitQuota) {}
 }
 
 message RatelimitRequest {
   RatelimitType type = 1;
   fixed64 clientId = 2;
+  optional bool probeOnly = 3;
+  optional uint32 maxDelay = 4;
 }
 
-message RatelimitResponse {
+message RatelimitQuota {
   bool granted = 1;
-  uint32 limit = 2;
-  uint32 remaining = 3;
-  uint64 reset = 4;
-  uint32 resetAfter = 5;
+  uint64 at = 2;
 }
 
 enum RatelimitType {
