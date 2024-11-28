@@ -1,6 +1,11 @@
 package gg.beemo.vanilla
 
 import gg.beemo.latte.logging.Log
+import gg.beemo.vanilla.proto.RatelimitGrpcKt
+import gg.beemo.vanilla.proto.RatelimitQuota
+import gg.beemo.vanilla.proto.ratelimitQuota
+import gg.beemo.vanilla.proto.RatelimitRequest
+import gg.beemo.vanilla.proto.RatelimitType
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.util.*

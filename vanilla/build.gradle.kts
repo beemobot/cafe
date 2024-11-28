@@ -8,6 +8,10 @@ plugins {
 group = "gg.beemo.vanilla"
 version = "1.0.0"
 
+val grpcVersion = "1.68.0"
+val grpcKotlinStubVersion = "1.4.1"
+val grpcProtobufVersion = "4.28.2"
+
 dependencies {
     // Kotlin
     val kotlinCoroutinesVersion = "1.9.0"
@@ -17,11 +21,10 @@ dependencies {
     implementation("gg.beemo.latte:latte")
 
     // gRPC
-    val grpcVersion = "1.68.0"
     implementation("io.grpc:grpc-netty-shaded:$grpcVersion")
     implementation("io.grpc:grpc-protobuf:$grpcVersion")
-    implementation("io.grpc:grpc-kotlin-stub:1.4.1")
-    implementation("com.google.protobuf:protobuf-kotlin:4.28.2")
+    implementation("io.grpc:grpc-kotlin-stub:$grpcKotlinStubVersion")
+    implementation("com.google.protobuf:protobuf-kotlin:$grpcProtobufVersion")
 
     // Logging
     val log4jVersion = "2.24.1"
@@ -32,14 +35,14 @@ dependencies {
 
 protobuf {
     protoc {
-        artifact = "com.google.protobuf:protoc:4.28.2"
+        artifact = "com.google.protobuf:protoc:$grpcProtobufVersion"
     }
     plugins {
         create("grpc") {
-            artifact = "io.grpc:protoc-gen-grpc-java:1.68.0"
+            artifact = "io.grpc:protoc-gen-grpc-java:$grpcVersion"
         }
         create("grpckt") {
-            artifact = "io.grpc:protoc-gen-grpc-kotlin:1.4.1:jdk8@jar"
+            artifact = "io.grpc:protoc-gen-grpc-kotlin:$grpcKotlinStubVersion:jdk8@jar"
         }
     }
     generateProtoTasks {
