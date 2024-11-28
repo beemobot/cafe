@@ -20,27 +20,41 @@ class GrpcRatelimitService : RatelimitGrpcKt.RatelimitCoroutineImplBase() {
     private val identifyRatelimits = ClientRatelimits(1, 5.seconds)
 
     override suspend fun reserveQuota(request: RatelimitRequest): RatelimitQuota {
-        val (ratelimitMap, typeString) = when (request.type) {
-            RatelimitType.GLOBAL -> globalRatelimits to "global"
-            RatelimitType.IDENTIFY -> identifyRatelimits to "identify"
+        val clientRatelimits = when (request.type) {
+            RatelimitType.GLOBAL -> globalRatelimits
+            RatelimitType.IDENTIFY -> identifyRatelimits
             else -> throw IllegalArgumentException("Unknown ratelimit type ${request.type}")
         }
 
-        val ratelimit = ratelimitMap.getClientRatelimit(request.clientId)
+        val ratelimit = clientRatelimits.getClientRatelimit(request.clientId)
         val maxDelay = if (request.hasMaxDelay()) request.maxDelay.toLong() else null
         val (granted, at) = ratelimit.reserveQuota(request.probeOnly, maxDelay)
+        val delay = (at - System.currentTimeMillis()).coerceAtLeast(0)
 
         if (request.probeOnly) {
-            log.debug("Probed {} quota slot for clientId {} is at {}", typeString, request.clientId, at)
+            log.debug(
+                "Probed {} quota slot for clientId {} is at {} (in {} ms)",
+                request.type,
+                request.clientId,
+                at,
+                delay
+            )
         } else if (granted) {
-            log.debug("Reserved {} quota slot for clientId {} at {}", typeString, request.clientId, at)
+            log.debug(
+                "Reserved {} quota slot for clientId {} at {} (in {} ms)",
+                request.type,
+                request.clientId,
+                at,
+                delay
+            )
         } else {
             val maxTimestamp = if (maxDelay != null) System.currentTimeMillis() + maxDelay else null
             log.debug(
-                "Failed to reserve {} quota slot for clientId {}, next slot would be at {}, requested max delay was {} (-> {})",
-                typeString,
+                "Failed to reserve {} quota slot for clientId {}, next slot would be at {} (in {} ms), requested max delay was {} (-> {})",
+                request.type,
                 request.clientId,
                 at,
+                delay,
                 maxDelay,
                 maxTimestamp
             )
