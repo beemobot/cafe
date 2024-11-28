@@ -6,7 +6,7 @@ import gg.beemo.latte.broker.IgnoreRpcRequest
 import gg.beemo.latte.broker.rpc.RpcStatus
 import gg.beemo.latte.logging.Log
 import gg.beemo.latte.ratelimit.SharedRatelimitData
-import gg.beemo.latte.util.Ratelimit
+import gg.beemo.latte.util.SuspendingRatelimit
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
@@ -56,10 +56,10 @@ class BrokerRpcRatelimitClient(connection: BrokerConnection) : BrokerClient(conn
 
 private class KafkaRatelimitProvider(private val burst: Int, private val duration: Duration) {
 
-    private val limiters = ConcurrentHashMap<String, Ratelimit>()
+    private val limiters = ConcurrentHashMap<String, SuspendingRatelimit>()
 
-    fun getClientRatelimit(clientId: String): Ratelimit = limiters.computeIfAbsent(clientId) {
-        Ratelimit(burst, duration)
+    fun getClientRatelimit(clientId: String): SuspendingRatelimit = limiters.computeIfAbsent(clientId) {
+        SuspendingRatelimit(burst, duration)
     }
 
 }
