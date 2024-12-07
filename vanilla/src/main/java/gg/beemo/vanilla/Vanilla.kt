@@ -42,8 +42,7 @@ object Vanilla {
             log.info("Destroying everything")
             ratelimitClient.destroy()
             brokerConnection.destroy()
-            grpcServer.shutdown()
-            grpcServer.awaitTermination()
+            grpcServer.shutdown().awaitTermination()
             LogManager.shutdown(true, true)
         }, "Vanilla Shutdown Hook"))
 
