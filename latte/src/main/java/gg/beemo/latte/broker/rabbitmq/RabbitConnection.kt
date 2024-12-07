@@ -96,9 +96,13 @@ class RabbitConnection(
                 body: ByteArray
             ) {
                 val key = envelope.routingKey ?: ""
-                val value = String(body)
-                val headers = BrokerMessageHeaders(properties.headers.mapValues { it.value.toString() })
-                dispatchIncomingMessage(topic, key, value, headers)
+                try {
+                    val value = String(body)
+                    val headers = BrokerMessageHeaders(properties.headers.mapValues { it.value.toString() })
+                    dispatchIncomingMessage(topic, key, value, headers)
+                } catch (e: Exception) {
+                    log.error("Error handling incoming broker message in topic $topic, dropping message", e)
+                }
                 channel.basicAck(envelope.deliveryTag, false)
             }
 
