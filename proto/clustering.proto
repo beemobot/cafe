@@ -1,0 +1,59 @@
+syntax = "proto3";
+package beemo.clustering;
+
+import "google/protobuf/empty.proto";
+
+option java_multiple_files = true;
+option java_package = "gg.beemo.latte.proto";
+option java_outer_classname = "ClusteringProto";
+
+
+service Clustering {
+  rpc GetClusterConfig(GetClusterConfigRequest) returns (GetClusterConfigResponse);
+  rpc UpdateGuildStates(stream UpdateGuildStateRequest) returns (google.protobuf.Empty);
+  rpc LookupGuildCluster(LookupGuildClusterRequest) returns (LookupGuildClusterResponse);
+}
+
+// --- General --- //
+
+message ShardIdentifier {
+  string cluster_id = 1;
+  uint32 shard_id = 2;
+  uint32 shard_count = 3;
+}
+
+// --- Cluster Config --- //
+
+message GetClusterConfigRequest {
+  string cluster_id = 1;
+  string grpc_endpoint = 2;
+}
+
+message GetClusterConfigResponse {
+  repeated ShardIdentifier shards = 1;
+}
+
+// --- Guild State --- //
+
+message UpdateGuildStateRequest {
+  ShardIdentifier shard = 1;
+  fixed64 guild_id = 2;
+  GuildState state = 3;
+}
+
+enum GuildState {
+  AVAILABLE = 0;
+  UNAVAILABLE = 1;
+  DELETED = 2;
+}
+
+// --- Guild Lookup --- //
+
+message LookupGuildClusterRequest {
+  fixed64 guild_id = 1;
+}
+
+message LookupGuildClusterResponse {
+  string cluster_id = 1;
+  string grpc_endpoint = 2;
+}
