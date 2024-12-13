@@ -1,14 +1,14 @@
 package gg.beemo.vanilla
 
 import gg.beemo.latte.logging.Log
-import gg.beemo.vanilla.proto.RatelimitGrpcKt
-import gg.beemo.vanilla.proto.RatelimitQuota
-import gg.beemo.vanilla.proto.ratelimitQuota
-import gg.beemo.vanilla.proto.RatelimitRequest
-import gg.beemo.vanilla.proto.RatelimitType
+import gg.beemo.latte.proto.RatelimitGrpcKt
+import gg.beemo.latte.proto.RatelimitQuota
+import gg.beemo.latte.proto.ratelimitQuota
+import gg.beemo.latte.proto.RatelimitRequest
+import gg.beemo.latte.proto.RatelimitType
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import java.util.*
+import java.util.LinkedList
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
