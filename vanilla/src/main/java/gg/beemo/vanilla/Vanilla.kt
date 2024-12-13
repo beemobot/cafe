@@ -4,6 +4,7 @@ import gg.beemo.latte.CommonConfig
 import gg.beemo.latte.broker.rabbitmq.RabbitConnection
 import gg.beemo.latte.config.Configurator
 import gg.beemo.latte.logging.Log
+import gg.beemo.vanilla.rpc.GrpcClusteringService
 import io.grpc.Server
 import io.grpc.ServerBuilder
 import kotlinx.coroutines.runBlocking
@@ -35,6 +36,7 @@ object Vanilla {
         log.debug("Initializing gRPC Ratelimit client")
         val grpcServer: Server = ServerBuilder.forPort(Config.GRPC_PORT)
             .addService(GrpcRatelimitService())
+            .addService(GrpcClusteringService())
             .build()
             .start()
 
