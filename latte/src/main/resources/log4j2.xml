@@ -15,5 +15,8 @@
         <Logger name="org.apache.kafka" level="WARN">
             <AppenderRef ref="Console" />
         </Logger>
+        <Logger name="io.grpc.netty" level="INFO">
+            <AppenderRef ref="Console" />
+        </Logger>
     </Loggers>
 </Configuration>

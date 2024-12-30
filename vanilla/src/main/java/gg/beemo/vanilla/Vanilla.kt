@@ -4,7 +4,8 @@ import gg.beemo.latte.CommonConfig
 import gg.beemo.latte.broker.rabbitmq.RabbitConnection
 import gg.beemo.latte.config.Configurator
 import gg.beemo.latte.logging.Log
-import gg.beemo.latte.logging.log
+import io.grpc.Server
+import io.grpc.ServerBuilder
 import kotlinx.coroutines.runBlocking
 import org.apache.logging.log4j.LogManager
 
@@ -22,19 +23,26 @@ object Vanilla {
         val brokerConnection = RabbitConnection(
             rabbitHosts = Config.RABBIT_HOST,
             serviceName = CommonConfig.BrokerServices.VANILLA,
-            instanceId  = "0", // There will only ever be one instance of vanilla
+            instanceId = "0", // There will only ever be one instance of vanilla
             useTls = Config.RABBIT_USE_TLS,
             username = Config.RABBIT_USERNAME,
             password = Config.RABBIT_PASSWORD,
         )
 
-        log.debug("Initializing Kafka Ratelimit client")
-        val ratelimitClient = RatelimitClient(brokerConnection)
+        log.debug("Initializing Broker Ratelimit client")
+        val ratelimitClient = BrokerRpcRatelimitClient(brokerConnection)
+
+        log.debug("Initializing gRPC Ratelimit client")
+        val grpcServer: Server = ServerBuilder.forPort(Config.GRPC_PORT)
+            .addService(GrpcRatelimitService())
+            .build()
+            .start()
 
         Runtime.getRuntime().addShutdownHook(Thread({
             log.info("Destroying everything")
             ratelimitClient.destroy()
             brokerConnection.destroy()
+            grpcServer.shutdown().awaitTermination()
             LogManager.shutdown(true, true)
         }, "Vanilla Shutdown Hook"))
 

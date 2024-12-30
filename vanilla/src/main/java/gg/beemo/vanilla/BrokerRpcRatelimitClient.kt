@@ -14,11 +14,11 @@ import kotlin.time.Duration.Companion.seconds
 // Give request expiry a bit of leeway in case of clock drift
 private val EXPIRY_GRACE_PERIOD = 5.seconds.inWholeMilliseconds
 
-class RatelimitClient(connection: BrokerConnection) : BrokerClient(connection) {
+class BrokerRpcRatelimitClient(connection: BrokerConnection) : BrokerClient(connection) {
 
     private val log by Log
-    private val globalRatelimitProvider = RatelimitProvider(50, 1.seconds)
-    private val identifyRatelimitProvider = RatelimitProvider(1, 5.seconds)
+    private val globalRatelimitProvider = KafkaRatelimitProvider(50, 1.seconds)
+    private val identifyRatelimitProvider = KafkaRatelimitProvider(1, 5.seconds)
 
     init {
         rpc<SharedRatelimitData.RatelimitRequestData, Unit>(
@@ -54,7 +54,7 @@ class RatelimitClient(connection: BrokerConnection) : BrokerClient(connection) {
 
 }
 
-private class RatelimitProvider(private val burst: Int, private val duration: Duration) {
+private class KafkaRatelimitProvider(private val burst: Int, private val duration: Duration) {
 
     private val limiters = ConcurrentHashMap<String, SuspendingRatelimit>()
 

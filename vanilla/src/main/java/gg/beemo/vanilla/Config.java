@@ -10,4 +10,6 @@ public class Config {
 
     public static String RABBIT_PASSWORD = "guest";
 
+    public static int GRPC_PORT = 1337;
+
 }
