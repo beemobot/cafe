@@ -1,11 +1,11 @@
 import {Logger} from "@beemobot/common";
 // ^ This needs to be updated; Probably @beemobot/cafe
-import {TAG} from "../index.js";
-import {MessagePayload, WebhookClient, WebhookCreateMessageOptions} from "discord.js";
+import {MessagePayload, WebhookClient, WebhookMessageCreateOptions} from "discord.js";
 import * as Sentry from "@sentry/node"
+import {TAG} from "../constants/logging.js";
 
 export let webhook: WebhookClient | undefined
-function init() {
+export function initDiscordWebhookClient() {
     if (process.env.DISCORD_WEBHOOK_URL == null) {
         Logger.warn(TAG, 'Discord webhook is not configured, important logs may not be logged to Discord.')
         return
@@ -14,7 +14,7 @@ function init() {
     webhook = new WebhookClient({ url: process.env.DISCORD_WEBHOOK_URL })
 }
 
-function send(payload: string | MessagePayload | WebhookCreateMessageOptions) {
+export function sendDiscordMessage(payload: string | MessagePayload | WebhookMessageCreateOptions) {
     if (webhook) {
         webhook.send(payload)
             .then(_ => {})
@@ -25,5 +25,3 @@ function send(payload: string | MessagePayload | WebhookCreateMessageOptions) {
 
     }
 }
-
-export const DiscordWebhook = { init: init, send: send }
