@@ -1,20 +1,19 @@
-import {Logger} from "@beemobot/common";
 // ^ This needs to be updated; Probably @beemobot/cafe
-import {prisma, TAG} from "../index.js";
-async function init() {
+import {logError, logIssue} from "./sentry.js";
+import {PrismaClient} from "@prisma/client";
+
+export let prisma = new PrismaClient()
+
+export async function initializePrisma() {
     try {
         if (process.env.DATABASE_URL == null) {
-            Logger.error(TAG, 'Prisma is not configured, discarding request to start.')
-            process.exit()
+            logIssue('No database URI has been found on the configuration. Please configure it as the service cannot run without it.')
             return
         }
 
         await prisma.$connect()
     } catch (ex) {
-        Logger.error(TAG, 'Failed to connect to Prisma, closing startup.')
-        console.error(ex)
+        logError('Failed to connect to the database, closing service.', ex)
         process.exit()
     }
 }
-
-export const Prismae = { init: init }

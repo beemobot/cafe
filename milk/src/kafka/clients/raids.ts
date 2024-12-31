@@ -1,101 +1,108 @@
-import {BrokerClient, KafkaConnection} from "@beemobot/common";
+import {BrokerClient, BrokerMessage, KafkaConnection, Logger} from "@beemobot/common";
 // ^ This needs to be updated; Probably @beemobot/cafe
-import {prisma} from "../../index.js";
-import {StringUtil} from "../../utils/string.js";
-import {retriable} from "../../utils/retriable.js";
+import {run} from "../../utils/retry.js";
+import {RaidManagementData} from "../../types/raid.js";
+import {logIssue} from "../../connections/sentry.js";
+import {TAG} from "../../constants/logging.js";
+import {
+    RAID_MANAGEMENT_BATCH_INSERT_KEY,
+    RAID_MANAGEMENT_CLIENT_TOPIC,
+    RAID_MANAGEMENT_CONCLUDE_RAID, RAID_MANAGEMENT_CREATE_RAID
+} from "../../constants/raid_management_kafka.js";
+import {concludeRaid, createRaid, getRaidByInternalId} from "../../database/raid.js";
+import {RaidUser} from "@prisma/client";
+import {insertRaidUsers} from "../../database/raid_users.js";
 
-export const KEY_BATCH_INSERT_RAID_USERS = "batch-insert-raid-users"
 export class RaidManagementClient extends BrokerClient<RaidManagementData> {
     constructor(conn: KafkaConnection) {
-        super(conn, "raid-management");
-        this.on(KEY_BATCH_INSERT_RAID_USERS, async (m) => {
-            if (m.value == null) {
-                return
-            }
-
-            const request = m.value.request
-            if (request == null) {
-                return
-            }
-
-            if (request.users.length > 0) {
-                await retriable(
-                    'insert_raid_users',
-                    async () => {
-                        prisma.raidUser.createMany({
-                            data: request.users.map((user) =>  {
-                                return {
-                                    internal_raid_id: request.raidId,
-                                    user_id: BigInt(user.idString),
-                                    name: user.name,
-                                    avatar_hash: user.avatarHash,
-                                    created_at: user.createdAt,
-                                    joined_at: user.joinedAt
-                                }
-                            }),
-                            skipDuplicates: true
-                        })
-                    },
-                    2,
-                    25
-                )
-            }
-
-            let raid = await prisma.raid.findUnique({where: {internal_id: request.raidId}}).then((result) => result);
-            if (raid == null) {
-                raid = await retriable(
-                    'create_raid',
-                    async () => {
-                        const uuid = StringUtil.random(12)
-                        return prisma.raid.create({
-                            data: {
-                                internal_id: request.raidId,
-                                external_id: uuid,
-                                guild_id: BigInt(request.guildIdString),
-                                concluded_at: request.concluded_at
-                            }
-                        });
-                    },
-                    1,
-                    25
-                )
-            } else {
-                if (request.concluded_at != null && (raid.concluded_at == null || raid.concluded_at !== new Date(request.concluded_at))) {
-                    raid = await retriable(
-                        'conclude_raid',
-                        async () => {
-                            return prisma.raid.update({
-                                where: { external_id: raid!.external_id, internal_id: request.raidId },
-                                data: { concluded_at: request.concluded_at }
-                            })
-                        },
-                        0.2,
-                        25
-                    )
-                }
-            }
-
-            await m.respond({ response: { externalId: raid!.external_id }, request: null })
-        })
+        super(conn, RAID_MANAGEMENT_CLIENT_TOPIC);
+        this.on(RAID_MANAGEMENT_CREATE_RAID, this.onCreateRaid)
+        this.on(RAID_MANAGEMENT_BATCH_INSERT_KEY, this.onBatchInsertRaidUsers)
+        this.on(RAID_MANAGEMENT_CONCLUDE_RAID, this.onConcludeRaid)
     }
-}
-export type RaidManagementData = {
-    request: RaidManagementRequest | null,
-    response: RaidManagementResponse | null
-}
-export type RaidManagementRequest = {
-    raidId: string,
-    guildIdString: string,
-    users: RaidManagementUser[],
-    concluded_at: (Date | string) | null
-}
-export type RaidManagementResponse = {
-    externalId: string
-}
-export type RaidManagementUser = {
-    idString: string,
-    name: string,
-    avatarHash: string | null,
-    createdAt: Date | string,
-    joinedAt: Date | string
+
+    private async onCreateRaid(message: BrokerMessage<RaidManagementData>) {
+        if (message.value == null || message.value.request == null) {
+            Logger.warn(TAG, `Received a message on ${RAID_MANAGEMENT_CREATE_RAID} but no request details was found.`)
+            return
+        }
+
+        const request = message.value.request
+
+        let raid = await getRaidByInternalId(request.raidId)
+        if (raid == null) {
+            Logger.info(TAG, `Creating raid ${request.raidId} from guild ${request.guildId}.`)
+            raid = await run(
+                'create_raid',
+                async () => createRaid(request.raidId, request.guildId, null),
+                1,
+                12
+            )
+        }
+
+        await message.respond({ response: { publicId: raid?.public_id, acknowledged: true }, request: null })
+    }
+
+    private async onConcludeRaid(message: BrokerMessage<RaidManagementData>) {
+        if (message.value == null || message.value.request == null) {
+            Logger.warn(TAG, `Received a message on ${RAID_MANAGEMENT_CONCLUDE_RAID} but no request details was found.`)
+            return
+        }
+
+        let {raidId, concludedAtMillis, guildId} = message.value.request
+        let conclusionDate: Date = new Date(concludedAtMillis ?? Date.now())
+
+        let raid = await getRaidByInternalId(raidId)
+        if (raid == null) {
+            logIssue(`Received a request to conclude a raid, but the raid is not in the database. [raid=${raidId}]`)
+            return
+        }
+
+        if (raid.concluded_at != null) {
+            Logger.warn(TAG, `Received a request to conclude a raid, but the raid is already concluded. [raid=${raidId}]`)
+            return
+        }
+
+        Logger.info(TAG, `Concluding raid ${raidId} from guild ${guildId}.`)
+        raid = await run(
+            'conclude_raid',
+            async () => concludeRaid(raid!.public_id, raid!.id, conclusionDate),
+            0.2,
+            12
+        )
+
+        await message.respond({ response: { publicId: raid!.public_id, acknowledged: true }, request: null })
+    }
+    
+    private async onBatchInsertRaidUsers(message: BrokerMessage<RaidManagementData>) {
+        if (message.value == null || message.value.request == null) {
+            Logger.warn(TAG, `Received a message on ${RAID_MANAGEMENT_BATCH_INSERT_KEY} but no request details was found.`)
+            return
+        }
+
+        const request = message.value.request
+
+        if (request.users.length > 0) {
+            Logger.info(TAG, `Inserting ${request.users.length} users to the raid ${request.raidId}.`)
+            const users = request.users.map((user) =>  {
+                return {
+                    raid_id: request.raidId,
+                    id: BigInt(user.id),
+                    name: user.name,
+                    avatar_hash: user.avatarHash,
+                    created_at: new Date(user.createdAtMillis),
+                    joined_at: new Date(user.joinedAtMillis)
+                } satisfies RaidUser
+            })
+
+            await run(
+                'insert_raid_users',
+                async () => insertRaidUsers(users),
+                2,
+                12
+            )
+        }
+
+        await message.respond({ response: { publicId: null, acknowledged: true }, request: null })
+    }
 }
