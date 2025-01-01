@@ -114,11 +114,6 @@ abstract class BrokerClient(
         }
     }
 
-    internal fun toResponseTopic(topic: String): String =
-        if (connection.supportsTopicHotSwap) "$topic.responses" else topic
-
-    internal fun toResponseKey(key: String): String = "$key.response"
-
 }
 
 private class TopicMetadata(
@@ -126,21 +121,6 @@ private class TopicMetadata(
     private val consumerScope: CoroutineScope,
     private val topic: String,
 ) {
-
-    private class KeyMetadata(val key: String) {
-        val producers: MutableSet<ProducerSubclient<*>> = Collections.synchronizedSet(HashSet())
-        val consumers: MutableSet<ConsumerSubclient<*>> = Collections.synchronizedSet(HashSet())
-
-        val isEmpty: Boolean
-            get() = producers.isEmpty() && consumers.isEmpty()
-
-        fun destroy() {
-            producers.forEach(ProducerSubclient<*>::destroy)
-            consumers.forEach(ConsumerSubclient<*>::destroy)
-            producers.clear()
-            consumers.clear()
-        }
-    }
 
     private val log by Log
     private val _keys: MutableMap<String, KeyMetadata> = Collections.synchronizedMap(HashMap())
@@ -158,6 +138,9 @@ private class TopicMetadata(
             subclient.key,
             subclient.topic
         )
+        check(subclient.topic == topic) {
+            "Attempting to register subclient with topic '${subclient.topic}' in TopicMetadata of '$topic'"
+        }
         val metadata = getOrCreateKeyMetadata(subclient.key)
         when (subclient) {
             is ConsumerSubclient<*> -> {
@@ -253,6 +236,21 @@ private class TopicMetadata(
         }
     }
 
+}
+
+private class KeyMetadata(val key: String) {
+    val producers: MutableSet<ProducerSubclient<*>> = Collections.synchronizedSet(HashSet())
+    val consumers: MutableSet<ConsumerSubclient<*>> = Collections.synchronizedSet(HashSet())
+
+    val isEmpty: Boolean
+        get() = producers.isEmpty() && consumers.isEmpty()
+
+    fun destroy() {
+        producers.forEach(ProducerSubclient<*>::destroy)
+        consumers.forEach(ConsumerSubclient<*>::destroy)
+        producers.clear()
+        consumers.clear()
+    }
 }
 
 @PublishedApi

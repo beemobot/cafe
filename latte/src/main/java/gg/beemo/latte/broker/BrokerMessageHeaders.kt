@@ -21,29 +21,17 @@ open class BrokerMessageHeaders(val headers: Map<String, String>) {
     }
 
     constructor(
-        sourceService: String,
-        sourceInstance: String,
-        targetServices: Set<String>,
-        targetInstances: Set<String>,
-    ) : this(
-        createHeadersMap(
-            sourceService,
-            sourceInstance,
-            targetServices,
-            targetInstances,
-            null,
-        )
-    )
-
-    constructor(
         connection: BrokerConnection,
         targetServices: Set<String>,
         targetInstances: Set<String>,
     ) : this(
-        connection.serviceName,
-        connection.instanceId,
-        targetServices,
-        targetInstances,
+        createHeadersMap(
+            connection.serviceName,
+            connection.instanceId,
+            targetServices,
+            targetInstances,
+            null,
+        ),
     )
 
     companion object {
@@ -54,6 +42,7 @@ open class BrokerMessageHeaders(val headers: Map<String, String>) {
         private const val HEADER_TARGET_INSTANCES = "target-instances"
         private const val HEADER_MESSAGE_ID = "message-id"
 
+        // Needs to be JvmStatic to be used in subclasses
         @JvmStatic
         protected fun createHeadersMap(
             sourceService: String,
@@ -66,21 +55,15 @@ open class BrokerMessageHeaders(val headers: Map<String, String>) {
             val headers = HashMap<String, String>()
             headers[HEADER_SOURCE_SERVICE] = sourceService
             headers[HEADER_SOURCE_INSTANCE] = sourceInstance
-            headers[HEADER_TARGET_SERVICES] = joinToString(targetServices)
-            headers[HEADER_TARGET_INSTANCES] = joinToString(targetInstances)
+            headers[HEADER_TARGET_SERVICES] = targetServices.joinToString(",")
+            headers[HEADER_TARGET_INSTANCES] = targetInstances.joinToString(",")
             headers[HEADER_MESSAGE_ID] = messageId ?: UUID.randomUUID().toString()
             headers.putAll(extra)
             return headers
         }
 
-        @JvmStatic
         protected fun splitToSet(value: String): Set<String> {
             return value.split(",").filter { it.isNotEmpty() }.toSet()
-        }
-
-        @JvmStatic
-        protected fun joinToString(value: Set<String>): String {
-            return value.joinToString(",")
         }
 
     }

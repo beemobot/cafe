@@ -85,6 +85,7 @@ abstract class BrokerConnection {
             listeners.remove(cb)
             if (listeners.size == 0) {
                 log.debug("Removing topic '{}'", topic)
+                deferredTopicsToCreate.remove(topic)
                 removeTopic(topic)
                 null
             } else {

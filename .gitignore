@@ -1,7 +1,6 @@
 .gradle/
 build/
 .idea/
-.vscode/
 node_modules/
 dist/
 yarn-error.log

@@ -41,8 +41,8 @@ class RpcClient<RequestT, ResponseT>(
     private val requestConsumer = client.consumer(topic, key, options, requestType, requestIsNullable) { msg ->
         suspend fun sendResponse(response: ResponseT?, status: RpcStatus, isException: Boolean, isUpdate: Boolean) {
             val responseMsg = RpcResponseMessage(
-                client.toResponseTopic(topic),
-                client.toResponseKey(key),
+                toResponseTopic(topic),
+                toResponseKey(key),
                 response,
                 RpcMessageHeaders(
                     connection,
@@ -71,7 +71,7 @@ class RpcClient<RequestT, ResponseT>(
             return@consumer
         } catch (ex: Exception) {
             log.error(
-                "Uncaught RPC callbac#k error while processing message ${msg.headers.messageId} " +
+                "Uncaught RPC callback error while processing message ${msg.headers.messageId} " +
                         "with key '$key' in topic '$topic'",
                 ex,
             )
@@ -79,16 +79,16 @@ class RpcClient<RequestT, ResponseT>(
         }
     }
     private val responseProducer = client.producer(
-        client.toResponseTopic(topic),
-        client.toResponseKey(key),
+        toResponseTopic(topic),
+        toResponseKey(key),
         options,
         responseType,
         responseIsNullable,
     )
     private val responseFlow = MutableSharedFlow<BaseBrokerMessage<ResponseT>>()
     private val responseConsumer = client.consumer(
-        client.toResponseTopic(topic),
-        client.toResponseKey(key),
+        toResponseTopic(topic),
+        toResponseKey(key),
         options,
         responseType,
         responseIsNullable,
@@ -159,6 +159,11 @@ class RpcClient<RequestT, ResponseT>(
         }
 
     }
+
+    private fun toResponseTopic(topic: String): String =
+        if (connection.supportsTopicHotSwap) "$topic.responses" else topic
+
+    private fun toResponseKey(key: String): String = "$key.response"
 
     override fun doDestroy() {
         requestProducer.destroy()
