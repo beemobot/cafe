@@ -1,0 +1,10 @@
+services:
+
+  frappe:
+    build: .
+    container_name: frappe
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - 80:80
