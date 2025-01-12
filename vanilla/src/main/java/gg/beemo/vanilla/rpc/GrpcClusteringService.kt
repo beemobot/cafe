@@ -2,9 +2,6 @@ package gg.beemo.vanilla.rpc
 
 import com.google.protobuf.Empty
 import gg.beemo.latte.logging.Log
-import gg.beemo.latte.proto.ClusterConfigRequest
-import gg.beemo.latte.proto.ClusterConfigResponse
-import gg.beemo.latte.proto.clusterConfigResponse
 import gg.beemo.latte.proto.ClusteringGrpcKt
 import gg.beemo.latte.proto.GetClusterConfigRequest
 import gg.beemo.latte.proto.GetClusterConfigResponse
@@ -12,12 +9,15 @@ import gg.beemo.latte.proto.GuildState
 import gg.beemo.latte.proto.LookupGuildClusterRequest
 import gg.beemo.latte.proto.LookupGuildClusterResponse
 import gg.beemo.latte.proto.ShardIdentifier
-import gg.beemo.latte.proto.shardIdentifier
 import gg.beemo.latte.proto.UpdateGuildStateRequest
 import gg.beemo.latte.proto.getClusterConfigResponse
 import gg.beemo.latte.proto.lookupGuildClusterResponse
+import gg.beemo.latte.proto.shardIdentifier
+import gg.beemo.vanilla.Config
+import io.grpc.Status
 import kotlinx.coroutines.flow.Flow
 import java.util.HashMap
+import kotlin.math.min
 
 data class ClusterConfig(
     val clusterId: String,
@@ -31,7 +31,6 @@ data class GuildStatus(
 )
 
 class GrpcClusteringService : ClusteringGrpcKt.ClusteringCoroutineImplBase() {
-
     private val log by Log
 
     private val clusters = HashMap<String, ClusterConfig>()
@@ -39,19 +38,25 @@ class GrpcClusteringService : ClusteringGrpcKt.ClusteringCoroutineImplBase() {
 
     override suspend fun getClusterConfig(request: GetClusterConfigRequest): GetClusterConfigResponse {
         log.info("Received cluster config request from cluster ID '${request.clusterId}'")
-        this.clusters[request.clusterId] = ClusterConfig(
-            clusterId = request.clusterId,
-            grpcEndpoint = request.grpcEndpoint,
-        )
-        // TODO Return correct shard mapping
-        return getClusterConfigResponse {
-            this.shards += listOf(
-                shardIdentifier {
-                    this.clusterId = "lol"
-                    this.shardId = 0
-                    this.shardCount = 1
-                },
+        this.clusters[request.clusterId] =
+            ClusterConfig(
+                clusterId = request.clusterId,
+                grpcEndpoint = request.grpcEndpoint,
             )
+
+        val clusterIndex = 0 // TODO map cluster id to index
+        val shardRange = getClusterShardRange(clusterIndex, Config.TEA_SHARD_COUNT, Config.TEA_CLUSTER_COUNT)
+        val shards =
+            shardRange.map { shardId ->
+                shardIdentifier {
+                    this.clusterId = request.clusterId
+                    this.shardId = shardId
+                    this.shardCount = Config.TEA_SHARD_COUNT
+                }
+            }
+
+        return getClusterConfigResponse {
+            this.shards += shards
         }
     }
 
@@ -60,7 +65,11 @@ class GrpcClusteringService : ClusteringGrpcKt.ClusteringCoroutineImplBase() {
             val shard = update.shard
             log.debug(
                 "Guild {} in Cluster {} Shard {}/{} has changed state to {}",
-                update.guildId, shard.clusterId, shard.shardId, shard.clusterId, update.state,
+                update.guildId,
+                shard.clusterId,
+                shard.shardId,
+                shard.clusterId,
+                update.state,
             )
             if (!clusters.containsKey(shard.clusterId)) {
                 log.warn("Unknown cluster {} in guild update for {}", shard.clusterId, update.guildId)
@@ -75,14 +84,40 @@ class GrpcClusteringService : ClusteringGrpcKt.ClusteringCoroutineImplBase() {
     }
 
     override suspend fun lookupGuildCluster(request: LookupGuildClusterRequest): LookupGuildClusterResponse {
-        val guild = guilds[request.guildId]
-        requireNotNull(guild) // TODO How to properly return errors in gRPC?
-        val cluster = clusters[guild.shard.clusterId]
-        requireNotNull(cluster) // TODO Same as above
+        val guild = guilds[request.guildId] ?: throw Status.NOT_FOUND.withDescription("Guild not found").asRuntimeException()
+        val cluster = clusters[guild.shard.clusterId] ?: throw Status.NOT_FOUND.withDescription("Cluster not found").asRuntimeException()
         return lookupGuildClusterResponse {
             this.clusterId = cluster.clusterId
             this.grpcEndpoint = cluster.grpcEndpoint
         }
     }
 
+    private fun getClusterShardRange(
+        cluster: Int,
+        totalShards: Int,
+        totalClusters: Int,
+    ): IntRange {
+        val numShardsForNormalCluster = totalShards / totalClusters
+        val extraShards = totalShards % totalClusters
+
+        // If the shard cluster is within the first 0 to (extraShards - 1) shard clusters,
+        // we will allocate one of the extra shards to it.
+        val numCommandedShards =
+            if (extraShards > 0 && cluster < extraShards) {
+                numShardsForNormalCluster + 1
+            } else {
+                numShardsForNormalCluster
+            }
+
+        val firstShardNumber =
+            if (extraShards > 0) {
+                cluster * numShardsForNormalCluster + min(cluster, extraShards - 1)
+            } else {
+                cluster * numShardsForNormalCluster
+            }
+
+        val lastShardNumber = firstShardNumber + numCommandedShards - 1
+
+        return firstShardNumber..lastShardNumber
+    }
 }

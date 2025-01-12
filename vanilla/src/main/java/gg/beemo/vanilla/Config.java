@@ -12,4 +12,7 @@ public class Config {
 
     public static int GRPC_PORT = 1337;
 
+    public static int TEA_SHARD_COUNT = 128;
+    public static int TEA_CLUSTER_COUNT = 8;
+
 }
