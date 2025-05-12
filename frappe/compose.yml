@@ -7,4 +7,4 @@ services:
     env_file:
       - .env
     ports:
-      - 80:80
+      -  "1337:1337"

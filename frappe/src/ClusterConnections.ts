@@ -1,5 +1,10 @@
 import type { ClientHttp2Session } from "node:http2";
 import { connect } from "node:http2";
+import { logger } from "./logger.js";
+
+// TODO gRPC lib for cluster lookup:
+//       - Preferred:    https://github.com/deeplay-io/nice-grpc/tree/master/packages/nice-grpc
+//       - Unmaintained: https://github.com/malijs/mali
 
 export class ClusterConnections {
 	// Cluster ID -> Connection
@@ -24,20 +29,21 @@ export class ClusterConnections {
 			throw new Error(`Connection to cluster ${clusterId} already exists`);
 		}
 
+		// TODO Return null if connection failed?
 		const connection = connect(endpoint);
 
 		connection.on("error", (err: Error) => {
-			console.error(`Uncaught Client Error for cluster ${clusterId}, closing connection`, err);
+			logger.error(`Uncaught Client Error for cluster ${clusterId}, closing connection`, err);
 			this.connectionCache.delete(clusterId);
 			connection.close();
 		});
 		connection.on("timeout", () => {
-			console.error(`Connection to cluster ${clusterId} timed out, closing connection`);
+			logger.error(`Connection to cluster ${clusterId} timed out, closing connection`);
 			this.connectionCache.delete(clusterId);
 			connection.close();
 		});
 		connection.on("close", () => {
-			console.log(`Connection to cluster ${clusterId} closed`);
+			logger.info(`Connection to cluster ${clusterId} closed`);
 			this.connectionCache.delete(clusterId);
 		});
 
