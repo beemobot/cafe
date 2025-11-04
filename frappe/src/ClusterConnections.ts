@@ -33,17 +33,17 @@ export class ClusterConnections {
 		const connection = connect(endpoint);
 
 		connection.on("error", (err: Error) => {
-			logger.error(`Uncaught Client Error for cluster ${clusterId}, closing connection`, err);
+			logger.error(`Uncaught Client Error for cluster ${clusterId} (${endpoint}), closing connection`, err);
 			this.connectionCache.delete(clusterId);
 			connection.close();
 		});
 		connection.on("timeout", () => {
-			logger.error(`Connection to cluster ${clusterId} timed out, closing connection`);
+			logger.error(`Connection to cluster ${clusterId} (${endpoint}) timed out, closing connection`);
 			this.connectionCache.delete(clusterId);
 			connection.close();
 		});
 		connection.on("close", () => {
-			logger.info(`Connection to cluster ${clusterId} closed`);
+			logger.info(`Connection to cluster ${clusterId} (${endpoint}) closed`);
 			this.connectionCache.delete(clusterId);
 		});
 

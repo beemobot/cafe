@@ -26,7 +26,13 @@ server.on(
 			logger.error(`Timeout on server stream ${originalRequest.id}`);
 		});
 
-		logger.info(`<- Server stream ${originalRequest.id} with flags ${requestFlags} and headers`, { ...requestHeaders });
+		// Session is only null if the stream is destroyed, but we literally just received a frash instance.
+		// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+		const socket = originalRequest.session!.socket;
+		logger.info(
+			`<- Incoming request ${originalRequest.id} from ${socket.remoteAddress}:${socket.remotePort} with flags ${requestFlags} and headers`,
+			{ ...requestHeaders },
+		);
 
 		const guildId = requestHeaders[GRPC_GUILD_ID_HEADER];
 		if (!guildId) {
